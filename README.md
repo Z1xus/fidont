@@ -3,79 +3,82 @@
 <picture><source media="(prefers-color-scheme: dark)" srcset="https://www.shieldcn.dev/github/downloads/Z1xus/fidont.svg?variant=secondary&amp;size=xs&amp;mode=dark"><img alt="Total downloads" src="https://www.shieldcn.dev/github/downloads/Z1xus/fidont.svg?variant=secondary&amp;size=xs&amp;mode=light"></picture>
 <picture><source media="(prefers-color-scheme: dark)" srcset="https://www.shieldcn.dev/github/last-commit/Z1xus/fidont.svg?variant=secondary&amp;size=xs&amp;mode=dark"><img alt="Last commit" src="https://www.shieldcn.dev/github/last-commit/Z1xus/fidont.svg?variant=secondary&amp;size=xs&amp;mode=light"></picture>
 
-stop paying for yubikeys, use your android phone as a fido2/webauthn key instead
+Stop paying for YubiKeys, use your Android phone as a FIDO2/WebAuthn key instead.
 
-it works as:
+It works as:
 
 - a passkey provider for apps and sites on the phone itself
-- a key for browsers on other devices, you scan their passkey qr code with the app
-- an nfc key, just tap the phone on a reader
-- a usb key for everything else, through the [dongle](#dongle)
+- a key for browsers on other devices, you scan their passkey QR code with the app
+- an NFC key, just tap the phone on a reader
+- a USB key for everything else, through the [dongle](#dongle)
 
-keys live in strongbox (or the tee), can't be extracted and only work with your fingerprint or pin.  
-there is no sync, so if you lose the phone or remove the screen lock they are GONE, unless you turned on [backup](#backup) first
+Your keys are made inside the phone's secure hardware (StrongBox, or the TEE on phones without it) and nothing can copy them out of there. Using one always takes your fingerprint or PIN.
+
+There is no sync, so if you lose the phone or remove the screen lock they are GONE, unless you turned on [backup](#backup) first.
 
 > [!NOTE]
-> fido2/webauthn compatible, but not fido certified. sites that only accept certified keys will reject it
+> FIDO2/WebAuthn compatible, but not FIDO certified. Sites that only accept certified keys will reject it.
 
-## install
+## Install
 
-needs android 14 or newer.  
-grab the apk from [releases](https://github.com/Z1xus/fidont/releases) and install it
+Needs Android 14 or newer.  
+Grab the APK from [releases](https://github.com/Z1xus/fidont/releases) and install it.
 
-## dongle
+## Dongle
 
-an esp32-s3 board that shows up as a usb security key and passes every request to the phone over bluetooth.  
-it holds no keys, so if you lose it you just flash another one
+The dongle is an ESP32-S3 board that shows up as a USB security key and passes every request to the phone over Bluetooth.  
+It holds no keys, so if you lose it you just flash another one.
 
-plug the board into the phone and tap `Set up`, the app flashes and pairs it in one go.  
-and if the board isn't found, hold BOOT while plugging it in
+Plug the board into the phone and tap "Set up", the app flashes and pairs it in one go.  
+And if the board isn't found, hold BOOT while plugging it in.
 
-if flashing from the phone doesn't work, use the [web flasher](https://z1xus.github.io/fidont/) and then `Pair over Bluetooth` in the app
+If flashing from the phone doesn't work, use the [web flasher](https://z1xus.github.io/fidont/) and then "Pair over Bluetooth" in the app.
 
-also the phone only talks to the dongle while the app is open, so open it when something asks for the key
+Also the phone only talks to the dongle while the app is open, so open it when something asks for the key.
 
-## backup
+## Backup
 
-off by default, because a key that was made inside strongbox can't be copied out, not even by the app.  
-if you turn on `Allow backup` in settings, new passkeys get made in the app and imported into strongbox instead, and the phone keeps an encrypted copy of each one that only opens with your fingerprint or pin
+Backup is off by default, because a key that was made inside StrongBox can't be copied out, not even by the app.  
+If you turn on "Allow backup" in settings, new passkeys get made in the app and imported into StrongBox instead, and the phone keeps an encrypted copy of each one that only opens with your fingerprint or PIN.
 
-`Export` saves those copies to a file, encrypted with a password (pbkdf2 and aes-256-gcm) or plain if you leave the password empty.  
-`Import` on another phone puts them into its keystore
+But passkeys from before you turned it on stay locked to the phone, so turn it on first if you want backups.
 
-passkeys from before you turned it on stay locked to the phone, so turn it on first if you want backups
+Export saves those copies to a file, encrypted with a password (PBKDF2 and AES-256-GCM), or plain if you leave the password empty.  
+Import on another phone puts them into its keystore.
 
-## other password managers
+## Other password managers
 
-fidont doesn't replace bitwarden (or google password manager, 1password etc), it does a different job.  
-those sync your passkeys everywhere, fidont keeps them on one phone and works like a hardware key, so use both
+fidont doesn't replace Bitwarden (or Google Password Manager, 1Password etc), it does a different job.  
+Those sync your passkeys everywhere, fidont keeps them on one phone and works like a hardware key, so use both.
 
-android 14 lets you turn on more than one passkey provider, so they just show up next to each other when a site asks.  
-what i'd actually do is keep the daily passkeys in the password manager and register fidont as the 2fa key for the password manager itself, and for the accounts you really care about
+Android 14 lets you turn on more than one passkey provider, so they just show up next to each other when a site asks.  
+What I'd actually do is keep the daily passkeys in the password manager and register fidont as the 2FA key for the password manager itself, and for the accounts you really care about.
 
-it also supports `hmac-secret` and prf, which is what bitwarden's passkey login and luks disk encryption through `systemd-cryptenroll` need
+It also supports hmac-secret and PRF, which is what Bitwarden's passkey login and LUKS disk encryption through systemd-cryptenroll need.
 
-## relay
+## Privacy
 
-the qr flow needs a relay between the phone and the computer, the app uses mine at `cable.ahhkeysummo2d.com`.  
-a relay only forwards encrypted messages, so it can't read them or sign in as you.  
-mine keeps no logs and stores nothing, a tunnel just sits in memory for 2 minutes at most
+The app has no accounts or analytics (or ads), and passkeys only leave the phone if you export them yourself.
 
-to run your own:
+But the QR flow needs a relay between the phone and the computer, and the app uses mine at cable.ahhkeysummo2d.com.  
+It sits behind Cloudflare, so Cloudflare and I both get to see your IP and when you connected.  
+The messages themselves are E2EE, so a relay can't read them or sign in as you. Mine keeps no logs and stores nothing, a tunnel just sits in memory for 2 minutes at most.
+
+### Running your own relay
 
 ```sh
 docker build -t fidont-relay relay
 docker run -p 8080:8080 fidont-relay
 ```
 
-browsers get the domain from a relay id (256 to 65535), so you can't pick it yourself.  
-`docker run fidont-relay -domain <id>` prints the one for your id, register it and point it at the relay with tls in front.  
-then set `RELAY` in [`Hybrid.kt`](core/src/commonMain/kotlin/us/z1x/fidont/hybrid/Hybrid.kt) to your id
+Browsers get the domain from a relay ID (256 to 65535), so you can't pick it yourself.  
+`docker run fidont-relay -domain <id>` prints the one for your ID, register it and point it at the relay with TLS in front.  
+Then set `RELAY` in [Hybrid.kt](core/src/commonMain/kotlin/us/z1x/fidont/hybrid/Hybrid.kt) to your ID and [build](#build) the app.
 
-## build
+## Build
 
-needs jdk 17+, the android sdk, go and docker.  
-the firmware goes first because the app bundles it
+Needs JDK 17+, the Android SDK, Go and Docker.  
+The firmware goes first because the app bundles it.
 
 ```sh
 docker run --rm -v "$PWD:/project" -w /project/firmware espressif/idf:v6.1 \
@@ -84,17 +87,6 @@ docker run --rm -v "$PWD:/project" -w /project/firmware espressif/idf:v6.1 \
 go build -C relay
 ```
 
-## privacy
+## Credits
 
-the app has no accounts or analytics (or ads), and passkeys only leave the phone if you export them yourself.  
-but the qr flow goes through my relay behind cloudflare, so both of us get to see your ip and when you connected.  
-the messages themselves are e2ee and the relay doesn't log anything
-
-## credits
-
-- app: [jetpack compose, camerax and credentials](https://developer.android.com/jetpack), [kotlin](https://kotlinlang.org), [okhttp](https://square.github.io/okhttp), [sqldelight](https://sqldelight.github.io/sqldelight), [zxing](https://github.com/zxing/zxing), [material icons](https://fonts.google.com/icons)
-- dongle firmware: [esp-idf](https://github.com/espressif/esp-idf), [tinyusb](https://github.com/hathach/tinyusb), [nimble](https://github.com/apache/mynewt-nimble), [mbed tls](https://github.com/Mbed-TLS/mbedtls)
-- relay: [coder/websocket](https://github.com/coder/websocket)
-- the qr flow is reimplemented from [chromium's hybrid transport](https://source.chromium.org/chromium/chromium/src/+/main:device/fido/cable/) and tested against [fenleon/passkey](https://github.com/fenleon/passkey)
-
-made by [z1xus](https://z1x.us), licensed under [GPL-3.0](LICENSE)
+The QR flow is reimplemented from [Chromium's hybrid transport](https://source.chromium.org/chromium/chromium/src/+/main:device/fido/cable/) and tested against [fenleon/passkey](https://github.com/fenleon/passkey).
