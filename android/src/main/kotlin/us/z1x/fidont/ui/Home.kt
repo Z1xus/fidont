@@ -8,14 +8,12 @@ import android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDEN
 import android.provider.Settings
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -28,12 +26,11 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,7 +71,9 @@ fun Home(onScan: () -> Unit) {
     var opened by remember { mutableStateOf<Credential?>(null) }
     var deleting by remember { mutableStateOf<Credential?>(null) }
     var forgetting by remember { mutableStateOf(false) }
+    var dongleOpen by remember { mutableStateOf(false) }
     val (dongle, onDongle) = rememberDongle()
+    val board = (dongle as? DongleState.Unpaired)?.board == true
     val credentials by produceState(emptyList<Credential>()) {
         val query = app.credentials.all()
         val listener = Query.Listener { value = query.executeAsList() }
@@ -83,6 +82,9 @@ fun Home(onScan: () -> Unit) {
         awaitDispose { query.removeListener(listener) }
     }
 
+    LaunchedEffect(board) {
+        if (board) dongleOpen = true
+    }
     LifecycleResumeEffect(Unit) {
         val service = ComponentName(context, ProviderService::class.java)
         secure = context.getSystemService(KeyguardManager::class.java).isDeviceSecure
@@ -100,8 +102,14 @@ fun Home(onScan: () -> Unit) {
         },
         onProvider = { CredentialManager.create(context).createSettingsPendingIntent().send() },
         onPasskey = { opened = it },
-        onDongle = { if (it == DongleAction.Forget) forgetting = true else onDongle(it) },
+        onDongle = { dongleOpen = true },
     )
+
+    if (dongleOpen) {
+        ModalBottomSheet(onDismissRequest = { dongleOpen = false }) {
+            DongleSheet(dongle) { if (it == DongleAction.Forget) forgetting = true else onDongle(it) }
+        }
+    }
 
     opened?.let { credential ->
         ModalBottomSheet(onDismissRequest = { opened = null }) {
@@ -127,11 +135,12 @@ fun Home(onScan: () -> Unit) {
         Confirm(
             title = stringResource(R.string.dongle_forget_title),
             body = R.string.dongle_forget_body,
-            action = R.string.dongle_forget,
+            action = R.string.forget,
             onDismiss = { forgetting = false },
             onConfirm = {
                 onDongle(DongleAction.Forget)
                 forgetting = false
+                dongleOpen = false
             },
         )
     }
@@ -145,7 +154,7 @@ fun HomeScreen(
     onLock: () -> Unit,
     onProvider: () -> Unit,
     onPasskey: (Credential) -> Unit,
-    onDongle: (DongleAction) -> Unit,
+    onDongle: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -179,31 +188,25 @@ fun HomeScreen(
             state = list,
             contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 96.dp),
         ) {
+            val steps = listOf(state.secure, state.provider).count { !it }
+            if (steps > 0) {
+                item(key = "setup") { SectionHeader(R.string.setup, Modifier.animateItem()) }
+            }
             if (!state.secure) {
                 item(key = "lock") {
-                    Notice(
-                        icon = R.drawable.ic_lock,
-                        title = R.string.lock_title,
-                        body = R.string.lock_body,
-                        action = R.string.lock_action,
-                        container = scheme.errorContainer,
-                        button = scheme.error,
-                        onClick = onLock,
-                        modifier = Modifier.animateItem(),
-                    )
+                    Step(R.drawable.ic_lock, R.string.lock_title, R.string.lock_body, 0, steps, onLock, Modifier.animateItem())
                 }
             }
             if (!state.provider) {
                 item(key = "provider") {
-                    Notice(
-                        icon = R.drawable.ic_shield,
-                        title = R.string.provider_title,
-                        body = R.string.provider_body,
-                        action = R.string.provider_action,
-                        container = scheme.primaryContainer,
-                        button = scheme.primary,
-                        onClick = onProvider,
-                        modifier = Modifier.animateItem(),
+                    Step(
+                        R.drawable.ic_shield,
+                        R.string.provider_title,
+                        R.string.provider_body,
+                        steps - 1,
+                        steps,
+                        onProvider,
+                        Modifier.animateItem(),
                     )
                 }
             }
@@ -222,7 +225,7 @@ fun HomeScreen(
                 }
             }
             item(key = "dongle header") { SectionHeader(R.string.dongle, Modifier.animateItem()) }
-            item(key = "dongle") { DongleSection(state.dongle, onDongle, Modifier.animateItem()) }
+            item(key = "dongle") { DongleRow(state.dongle, onDongle, Modifier.animateItem()) }
         }
     }
 }
@@ -254,35 +257,22 @@ fun PasskeySheet(
 }
 
 @Composable
-private fun Notice(
+private fun Step(
     icon: Int,
     title: Int,
     body: Int,
-    action: Int,
-    container: Color,
-    button: Color,
+    index: Int,
+    count: Int,
     onClick: () -> Unit,
     modifier: Modifier,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(GroupCorner),
-        color = container,
-    ) {
-        Column(Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 12.dp)) {
-            Row {
-                Icon(painterResource(icon), contentDescription = null, Modifier.padding(top = 2.dp))
-                Column(Modifier.padding(start = 16.dp)) {
-                    Text(stringResource(title), style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(body), style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-            Button(
-                onClick = onClick,
-                modifier = Modifier.align(Alignment.End).padding(top = 8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = button, contentColor = contentColorFor(button)),
-            ) { Text(stringResource(action)) }
-        }
+    GroupItem(index, count, modifier, onClick) {
+        ListItem(
+            headlineContent = { Text(stringResource(title)) },
+            supportingContent = { Text(stringResource(body)) },
+            leadingContent = { IconBadge(icon, MaterialTheme.colorScheme.errorContainer) },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        )
     }
 }
 
