@@ -1,11 +1,5 @@
 package us.z1x.fidont.ui
 
-import android.app.KeyguardManager
-import android.content.ComponentName
-import android.content.Intent
-import android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG
-import android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL
-import android.provider.Settings
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,9 +14,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
@@ -39,20 +32,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.credentials.CredentialManager
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.cash.sqldelight.Query
 import us.z1x.fidont.R
 import us.z1x.fidont.app
 import us.z1x.fidont.store.Credential
-import us.z1x.fidont.transport.provider.ProviderService
 
 class HomeState(
     val secure: Boolean,
@@ -63,11 +52,13 @@ class HomeState(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Home(onScan: () -> Unit) {
+fun Home(
+    onScan: () -> Unit,
+    onSettings: () -> Unit,
+) {
     val context = LocalContext.current
     val app = context.app
-    var secure by remember { mutableStateOf(true) }
-    var provider by remember { mutableStateOf(true) }
+    val setup = rememberSetup()
     var opened by remember { mutableStateOf<Credential?>(null) }
     var deleting by remember { mutableStateOf<Credential?>(null) }
     var forgetting by remember { mutableStateOf(false) }
@@ -85,22 +76,12 @@ fun Home(onScan: () -> Unit) {
     LaunchedEffect(board) {
         if (board) dongleOpen = true
     }
-    LifecycleResumeEffect(Unit) {
-        val service = ComponentName(context, ProviderService::class.java)
-        secure = context.getSystemService(KeyguardManager::class.java).isDeviceSecure
-        provider = context.getSystemService(android.credentials.CredentialManager::class.java).isEnabledCredentialProviderService(service)
-        onPauseOrDispose {}
-    }
-
     HomeScreen(
-        state = HomeState(secure, provider, credentials, dongle),
+        state = HomeState(setup.secure, setup.provider, credentials, dongle),
         onScan = onScan,
-        onLock = {
-            val intent = Intent(Settings.ACTION_BIOMETRIC_ENROLL)
-            intent.putExtra(Settings.EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED, BIOMETRIC_STRONG or DEVICE_CREDENTIAL)
-            context.startActivity(intent)
-        },
-        onProvider = { CredentialManager.create(context).createSettingsPendingIntent().send() },
+        onSettings = onSettings,
+        onLock = setup.onLock,
+        onProvider = setup.onProvider,
         onPasskey = { opened = it },
         onDongle = { dongleOpen = true },
     )
@@ -151,6 +132,7 @@ fun Home(onScan: () -> Unit) {
 fun HomeScreen(
     state: HomeState,
     onScan: () -> Unit,
+    onSettings: () -> Unit,
     onLock: () -> Unit,
     onProvider: () -> Unit,
     onPasskey: (Credential) -> Unit,
@@ -167,6 +149,11 @@ fun HomeScreen(
         topBar = {
             LargeTopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
+                actions = {
+                    IconButton(onClick = onSettings) {
+                        Icon(painterResource(R.drawable.ic_settings), stringResource(R.string.settings))
+                    }
+                },
                 colors =
                     TopAppBarDefaults.topAppBarColors(
                         containerColor = scheme.surfaceContainer,
@@ -194,19 +181,20 @@ fun HomeScreen(
             }
             if (!state.secure) {
                 item(key = "lock") {
-                    Step(R.drawable.ic_lock, R.string.lock_title, R.string.lock_body, 0, steps, onLock, Modifier.animateItem())
+                    Step(R.drawable.ic_lock, R.string.lock_title, R.string.lock_body, false, 0, steps, onLock, Modifier.animateItem())
                 }
             }
             if (!state.provider) {
                 item(key = "provider") {
                     Step(
-                        R.drawable.ic_shield,
-                        R.string.provider_title,
-                        R.string.provider_body,
-                        steps - 1,
-                        steps,
-                        onProvider,
-                        Modifier.animateItem(),
+                        icon = R.drawable.ic_shield,
+                        title = R.string.provider_title,
+                        body = R.string.provider_body,
+                        done = false,
+                        index = steps - 1,
+                        count = steps,
+                        onClick = onProvider,
+                        modifier = Modifier.animateItem(),
                     )
                 }
             }
@@ -215,14 +203,15 @@ fun HomeScreen(
                 item(key = "empty") { Empty(Modifier.animateItem()) }
             }
             itemsIndexed(state.credentials, key = { _, credential -> credential.id.toHexString() }) { index, credential ->
-                GroupItem(index, state.credentials.size, Modifier.animateItem(), onClick = { onPasskey(credential) }) {
-                    ListItem(
-                        headlineContent = { Text(credential.rpId) },
-                        supportingContent = account(credential)?.let { { Text(it) } },
-                        leadingContent = { Avatar(credential.rpId) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    )
-                }
+                Entry(
+                    index = index,
+                    count = state.credentials.size,
+                    headline = credential.rpId,
+                    modifier = Modifier.animateItem(),
+                    supporting = account(credential),
+                    leading = { Avatar(credential.rpId) },
+                    onClick = { onPasskey(credential) },
+                )
             }
             item(key = "dongle header") { SectionHeader(R.string.dongle, Modifier.animateItem()) }
             item(key = "dongle") { DongleRow(state.dongle, onDongle, Modifier.animateItem()) }
@@ -253,26 +242,6 @@ fun PasskeySheet(
             Icon(painterResource(R.drawable.ic_delete), contentDescription = null, Modifier.padding(end = 8.dp))
             Text(stringResource(R.string.delete_passkey))
         }
-    }
-}
-
-@Composable
-private fun Step(
-    icon: Int,
-    title: Int,
-    body: Int,
-    index: Int,
-    count: Int,
-    onClick: () -> Unit,
-    modifier: Modifier,
-) {
-    GroupItem(index, count, modifier, onClick) {
-        ListItem(
-            headlineContent = { Text(stringResource(title)) },
-            supportingContent = { Text(stringResource(body)) },
-            leadingContent = { IconBadge(icon, MaterialTheme.colorScheme.errorContainer) },
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        )
     }
 }
 

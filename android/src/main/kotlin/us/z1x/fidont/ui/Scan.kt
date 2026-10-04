@@ -2,7 +2,6 @@ package us.z1x.fidont.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.compose.CameraXViewfinder
@@ -50,7 +49,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -79,7 +77,6 @@ import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.ReaderException
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.qrcode.QRCodeReader
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.awaitCancellation
@@ -105,7 +102,6 @@ fun Scan(onClose: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     val granted = PERMISSIONS.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
     var state by remember { mutableStateOf(if (granted) ScanState.Scanning else ScanState.Denied) }
-    var back by remember { mutableFloatStateOf(0f) }
     val allow =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
             if (result.values.all { it }) state = ScanState.Scanning
@@ -114,28 +110,11 @@ fun Scan(onClose: () -> Unit) {
     LaunchedEffect(Unit) {
         if (!granted) allow.launch(PERMISSIONS)
     }
-    PredictiveBackHandler { progress ->
-        try {
-            progress.collect { back = it.progress }
-            onClose()
-        } catch (e: CancellationException) {
-            back = 0f
-            throw e
-        }
-    }
-
     ScanScreen(
         state = state,
         onBack = onClose,
         onAllow = { allow.launch(PERMISSIONS) },
         onRetry = { state = ScanState.Scanning },
-        modifier =
-            Modifier.graphicsLayer {
-                scaleX = 1f - back / 10
-                scaleY = 1f - back / 10
-                shape = RoundedCornerShape((32 * back).dp)
-                clip = true
-            },
     ) {
         Camera { text ->
             val qr = Qr.parse(text)

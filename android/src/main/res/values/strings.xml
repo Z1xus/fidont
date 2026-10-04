@@ -8,6 +8,17 @@
     <string name="prompt_sign_in">Sign in to %1$s</string>
     <string name="prompt_choose">Choose an account</string>
 
+    <string name="onboarding_welcome">Your phone is the key</string>
+    <string name="onboarding_welcome_body">Sign in with passkeys from this phone, in apps, on websites, and on other computers.</string>
+    <string name="onboarding_safe">Keys stay on this phone</string>
+    <string name="onboarding_safe_body">They live in the phone\'s secure hardware. Every sign-in needs your fingerprint or PIN.</string>
+    <string name="onboarding_setup">Two things to turn on</string>
+    <string name="onboarding_ready">You\'re all set</string>
+    <string name="next">Next</string>
+    <string name="skip">Skip</string>
+    <string name="start">Get started</string>
+    <string name="done">Done</string>
+
     <string name="setup">Finish setup</string>
     <string name="lock_title">Set a screen lock</string>
     <string name="lock_body">Passkeys need a PIN, pattern, or fingerprint.</string>
@@ -63,4 +74,31 @@
     <string name="forget">Forget</string>
     <string name="dongle_forget_title">Forget dongle?</string>
     <string name="dongle_forget_body">Set it up again to use it.</string>
+
+    <string name="settings">Settings</string>
+    <string name="appearance">Appearance</string>
+    <string name="theme">Theme</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="about">About</string>
+    <string name="privacy">Privacy</string>
+    <string name="open_source">Open source</string>
+    <string name="open_source_body">What fidont is built on</string>
+    <string name="license">License</string>
+    <string name="source">Source code</string>
+    <string name="author">Made by z1xus</string>
+    <string name="version">Version</string>
+
+    <string name="privacy_phone">On this phone</string>
+    <string name="privacy_phone_body">Your passkeys are made and kept in this phone\'s secure hardware. They are never uploaded, synced, or backed up. fidont has no accounts, ads, or analytics.</string>
+    <string name="privacy_relay">The relay</string>
+    <string name="privacy_relay_body">When you scan a QR code, your phone and the computer talk through a relay at cable.ahhkeysummo2d.com. z1xus runs it behind Cloudflare. Everything they send is encrypted end to end, so nobody in between can read it or sign in as you. The relay and Cloudflare see your IP address and the time of the connection. The relay keeps no logs.</string>
+    <string name="privacy_dongle">The dongle</string>
+    <string name="privacy_dongle_body">The dongle holds no passkeys. It passes requests from the computer to your phone over an encrypted Bluetooth link.</string>
+    <string name="privacy_contact">Questions</string>
+
+    <string name="licenses_app">App</string>
+    <string name="licenses_firmware">Dongle firmware</string>
+    <string name="licenses_relay">Relay</string>
 </resources>

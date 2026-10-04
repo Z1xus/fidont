@@ -1,25 +1,42 @@
 package us.z1x.fidont.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import us.z1x.fidont.R
 
 val GroupCorner = 20.dp
 private val InnerCorner = 4.dp
@@ -84,6 +101,90 @@ fun Avatar(
             name.take(1).uppercase(),
             color = contentColorFor(container),
             style = if (size > BadgeSize) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleMedium,
+        )
+    }
+}
+
+@Composable
+fun Entry(
+    index: Int,
+    count: Int,
+    headline: String,
+    modifier: Modifier = Modifier,
+    supporting: String? = null,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    onClick: (() -> Unit)? = null,
+) {
+    GroupItem(index, count, modifier, onClick) {
+        ListItem(
+            headlineContent = { Text(headline) },
+            supportingContent = supporting?.let { { Text(it) } },
+            leadingContent = leading,
+            trailingContent = trailing,
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        )
+    }
+}
+
+@Composable
+fun Step(
+    icon: Int,
+    title: Int,
+    body: Int,
+    done: Boolean,
+    index: Int,
+    count: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Entry(
+        index = index,
+        count = count,
+        headline = stringResource(title),
+        modifier = modifier,
+        supporting = stringResource(body),
+        leading = { IconBadge(icon, if (done) scheme.primaryContainer else scheme.errorContainer) },
+        trailing = {
+            AnimatedVisibility(done, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
+                Icon(painterResource(R.drawable.ic_check), stringResource(R.string.done), tint = scheme.primary)
+            }
+        },
+        onClick = onClick.takeUnless { done },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun Page(
+    title: Int,
+    onBack: () -> Unit,
+    content: LazyListScope.() -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    Scaffold(
+        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
+        containerColor = scheme.surfaceContainer,
+        topBar = {
+            LargeTopAppBar(
+                title = { Text(stringResource(title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(painterResource(R.drawable.ic_back), stringResource(R.string.back)) }
+                },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = scheme.surfaceContainer,
+                        scrolledContainerColor = scheme.surfaceContainer,
+                    ),
+                scrollBehavior = scroll,
+            )
+        },
+    ) { padding ->
+        LazyColumn(
+            contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 24.dp),
+            content = content,
         )
     }
 }

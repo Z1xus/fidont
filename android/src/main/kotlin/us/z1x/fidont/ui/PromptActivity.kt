@@ -54,7 +54,7 @@ class PromptActivity : ComponentActivity() {
         request.result.invokeOnCompletion { runOnUiThread(::finish) }
         when (request) {
             is Request.Authenticate -> authenticate(request)
-            is Request.Choose -> setContent { Theme { Chooser(request) } }
+            is Request.Choose -> setContent { Theme(rememberDark()) { Chooser(request) } }
         }
     }
 

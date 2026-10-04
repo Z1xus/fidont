@@ -1,0 +1,28 @@
+package us.z1x.fidont
+
+import android.content.Context
+import androidx.core.content.edit
+import kotlinx.coroutines.flow.MutableStateFlow
+
+private const val THEME = "theme"
+private const val ONBOARDED = "onboarded"
+
+enum class ThemeMode { System, Light, Dark }
+
+class Preferences(
+    context: Context,
+) {
+    private val store = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    val theme = MutableStateFlow(ThemeMode.valueOf(store.getString(THEME, null) ?: ThemeMode.System.name))
+    val onboarded = MutableStateFlow(store.getBoolean(ONBOARDED, false))
+
+    fun setTheme(mode: ThemeMode) {
+        store.edit { putString(THEME, mode.name) }
+        theme.value = mode
+    }
+
+    fun finishOnboarding() {
+        store.edit { putBoolean(ONBOARDED, true) }
+        onboarded.value = true
+    }
+}
