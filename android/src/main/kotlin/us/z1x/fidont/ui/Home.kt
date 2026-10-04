@@ -203,10 +203,8 @@ fun HomeScreen(
             }
             item(key = "dongle header") { SectionHeader(R.string.dongle, Modifier.animateItem()) }
             item(key = "dongle") { DongleRow(state.dongle, onDongle, Modifier.animateItem()) }
-            if (state.bluetooth != BluetoothState.Unavailable) {
-                item(key = "bluetooth header") { SectionHeader(R.string.bluetooth, Modifier.animateItem()) }
-                item(key = "bluetooth") { BluetoothRow(state.bluetooth, onBluetooth, Modifier.animateItem()) }
-            }
+            item(key = "bluetooth header") { SectionHeader(R.string.bluetooth, Modifier.animateItem()) }
+            item(key = "bluetooth") { BluetoothRow(state.bluetooth, onBluetooth, Modifier.animateItem()) }
         }
     }
 }

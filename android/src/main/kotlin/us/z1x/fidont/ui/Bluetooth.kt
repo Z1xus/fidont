@@ -86,14 +86,16 @@ fun BluetoothRow(
             when (state) {
                 is BluetoothState.Connected -> stringResource(R.string.bluetooth_connected, state.computer)
                 BluetoothState.NeedsBluetooth -> stringResource(R.string.dongle_bluetooth)
-                else -> stringResource(R.string.dongle_searching)
+                BluetoothState.Unavailable -> stringResource(R.string.bluetooth_unavailable)
+                BluetoothState.Waiting -> stringResource(R.string.dongle_searching)
             },
         modifier = modifier,
         supporting =
             when (state) {
                 is BluetoothState.Connected -> null
                 BluetoothState.NeedsBluetooth -> stringResource(R.string.bluetooth_allow_body)
-                else -> stringResource(R.string.bluetooth_waiting_body)
+                BluetoothState.Unavailable -> stringResource(R.string.bluetooth_unavailable_body)
+                BluetoothState.Waiting -> stringResource(R.string.bluetooth_waiting_body)
             },
         leading = {
             IconBadge(
@@ -107,6 +109,6 @@ fun BluetoothRow(
                 },
             )
         },
-        onClick = onClick.takeIf { connected == null },
+        onClick = onClick.takeIf { state == BluetoothState.Waiting || state == BluetoothState.NeedsBluetooth },
     )
 }
