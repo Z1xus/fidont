@@ -6,7 +6,7 @@ you can also reach me through [z1x.us](https://z1x.us)
 things i want to hear about:
 
 - getting a signature without the fingerprint or pin prompt
-- getting a private key out of the phone
+- getting a private key out of the phone any other way than the export in settings
 - the relay or the dongle reading or changing a request
 - an app or a nearby device getting a signature for a site that isn't theirs
 
