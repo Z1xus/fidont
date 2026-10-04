@@ -95,7 +95,14 @@
     <string name="export">Export</string>
     <string name="export_body">Save your passkeys to a file</string>
     <string name="export_title">Export passkeys</string>
-    <string name="export_password_body">Leave it empty to save the file without encryption.</string>
+    <string name="export_protection">Protection</string>
+    <string name="export_encrypt">Encrypt with a password</string>
+    <string name="export_plain_body">Without a password, anyone with the file can sign in as you.</string>
+    <string name="export_included">Included</string>
+    <string name="export_kept">Stays on this phone</string>
+    <string name="export_kept_body">Created while backup was off.</string>
+    <string name="export_empty">Nothing to export</string>
+    <string name="export_empty_body">Only passkeys created while backup is on can be exported.</string>
     <plurals name="exported">
         <item quantity="one">%d passkey saved</item>
         <item quantity="other">%d passkeys saved</item>

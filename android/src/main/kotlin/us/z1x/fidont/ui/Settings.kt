@@ -36,6 +36,7 @@ fun Settings(
     onBack: () -> Unit,
     onPrivacy: () -> Unit,
     onLicenses: () -> Unit,
+    onExport: () -> Unit,
 ) {
     val context = LocalContext.current
     val preferences = context.app.preferences
@@ -51,7 +52,7 @@ fun Settings(
         commit = BuildConfig.COMMIT,
         strongBox = strongBox,
         setup = rememberSetup(),
-        backup = rememberBackup(),
+        backup = rememberBackup(onExport),
         onTheme = preferences::setTheme,
         onBlack = preferences::setBlack,
         onDynamic = preferences::setDynamic,

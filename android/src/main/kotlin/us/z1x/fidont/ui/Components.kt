@@ -2,6 +2,7 @@ package us.z1x.fidont.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -28,9 +29,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import us.z1x.fidont.R
+import us.z1x.fidont.store.Credential
 
 val GroupCorner = 20.dp
 private val InnerCorner = 4.dp
@@ -121,6 +124,51 @@ fun Entry(
     }
 }
 
+fun account(credential: Credential): String? = credential.userName.ifEmpty { credential.displayName }.ifEmpty { null }
+
+@Composable
+fun PasskeyEntry(
+    index: Int,
+    count: Int,
+    credential: Credential,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+) {
+    Entry(
+        index = index,
+        count = count,
+        headline = credential.rpId,
+        modifier = modifier,
+        supporting = account(credential),
+        leading = { Avatar(credential.rpId) },
+        onClick = onClick,
+    )
+}
+
+@Composable
+fun Empty(
+    title: Int,
+    body: Int,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    GroupItem(0, 1, modifier) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            IconBadge(R.drawable.ic_key, scheme.secondaryContainer, 56.dp)
+            Text(stringResource(title), Modifier.padding(top = 16.dp, bottom = 4.dp), style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(body),
+                color = scheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+}
+
 @Composable
 fun Step(
     icon: Int,
@@ -149,6 +197,7 @@ fun Step(
 fun Page(
     title: Int,
     onBack: () -> Unit,
+    bottomBar: @Composable () -> Unit = {},
     content: LazyListScope.() -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -163,6 +212,7 @@ fun Page(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = scheme.surfaceBright),
             )
         },
+        bottomBar = bottomBar,
     ) { padding ->
         LazyColumn(
             contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 24.dp),

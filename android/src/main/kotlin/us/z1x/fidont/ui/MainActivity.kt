@@ -40,7 +40,7 @@ private const val FADE_OUT = 90
 private const val NEAR = 0.9f
 private const val FAR = 1.1f
 
-private enum class Screen { Home, Scan, Settings, Privacy, Licenses }
+private enum class Screen { Home, Scan, Settings, Privacy, Licenses, Export }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -110,11 +110,34 @@ private fun Screens() {
             },
         ) {
             when (screen) {
-                Screen.Home -> Home(onScan = { open(Screen.Scan) }, onSettings = { open(Screen.Settings) })
-                Screen.Scan -> Scan(onClose = close)
-                Screen.Settings -> Settings(close, onPrivacy = { open(Screen.Privacy) }, onLicenses = { open(Screen.Licenses) })
-                Screen.Privacy -> PrivacyScreen(close)
-                Screen.Licenses -> LicensesScreen(close)
+                Screen.Home -> {
+                    Home(onScan = { open(Screen.Scan) }, onSettings = { open(Screen.Settings) })
+                }
+
+                Screen.Scan -> {
+                    Scan(onClose = close)
+                }
+
+                Screen.Settings -> {
+                    Settings(
+                        onBack = close,
+                        onPrivacy = { open(Screen.Privacy) },
+                        onLicenses = { open(Screen.Licenses) },
+                        onExport = { open(Screen.Export) },
+                    )
+                }
+
+                Screen.Privacy -> {
+                    PrivacyScreen(close)
+                }
+
+                Screen.Licenses -> {
+                    LicensesScreen(close)
+                }
+
+                Screen.Export -> {
+                    Export(close)
+                }
             }
         }
     }

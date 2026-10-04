@@ -192,18 +192,10 @@ fun HomeScreen(
             }
             item(key = "passkeys") { SectionHeader(R.string.passkeys, Modifier.animateItem()) }
             if (state.credentials.isEmpty()) {
-                item(key = "empty") { Empty(Modifier.animateItem()) }
+                item(key = "empty") { Empty(R.string.passkeys_empty, R.string.passkeys_empty_body, Modifier.animateItem()) }
             }
             itemsIndexed(state.credentials, key = { _, credential -> credential.id.toHexString() }) { index, credential ->
-                Entry(
-                    index = index,
-                    count = state.credentials.size,
-                    headline = credential.rpId,
-                    modifier = Modifier.animateItem(),
-                    supporting = account(credential),
-                    leading = { Avatar(credential.rpId) },
-                    onClick = { onPasskey(credential) },
-                )
+                PasskeyEntry(index, state.credentials.size, credential, Modifier.animateItem()) { onPasskey(credential) }
             }
             item(key = "dongle header") { SectionHeader(R.string.dongle, Modifier.animateItem()) }
             item(key = "dongle") { DongleRow(state.dongle, onDongle, Modifier.animateItem()) }
@@ -238,30 +230,6 @@ fun PasskeySheet(
 }
 
 @Composable
-private fun Empty(modifier: Modifier) {
-    val scheme = MaterialTheme.colorScheme
-    GroupItem(0, 1, modifier) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            IconBadge(R.drawable.ic_key, scheme.secondaryContainer, 56.dp)
-            Text(
-                stringResource(R.string.passkeys_empty),
-                Modifier.padding(top = 16.dp, bottom = 4.dp),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                stringResource(R.string.passkeys_empty_body),
-                color = scheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-    }
-}
-
-@Composable
 private fun Confirm(
     title: String,
     body: Int,
@@ -277,5 +245,3 @@ private fun Confirm(
         confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(action)) } },
     )
 }
-
-private fun account(credential: Credential): String? = credential.userName.ifEmpty { credential.displayName }.ifEmpty { null }

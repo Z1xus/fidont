@@ -27,10 +27,7 @@ import us.z1x.fidont.R
 import us.z1x.fidont.app
 import us.z1x.fidont.backupEncrypted
 import us.z1x.fidont.decodeBackup
-import us.z1x.fidont.encodeBackup
 import java.security.GeneralSecurityException
-
-private const val FILE_NAME = "passkeys.fidont"
 
 class Backup(
     val enabled: Boolean,
@@ -42,22 +39,19 @@ class Backup(
 private sealed interface Dialog {
     data object Off : Dialog
 
-    data object Export : Dialog
-
     class Import(
         val file: ByteArray,
     ) : Dialog
 }
 
 @Composable
-fun rememberBackup(): Backup {
+fun rememberBackup(onExport: () -> Unit): Backup {
     val context = LocalContext.current
     val resources = LocalResources.current
     val app = context.app
     val scope = rememberCoroutineScope()
     var enabled by remember { mutableStateOf(app.keys.backup) }
     var dialog by remember { mutableStateOf<Dialog?>(null) }
-    var exported by remember { mutableStateOf<Pair<ByteArray, Int>?>(null) }
 
     fun restore(
         file: ByteArray,
@@ -75,17 +69,6 @@ fun rememberBackup(): Backup {
         }
     }
 
-    val save =
-        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
-            val (file, count) = exported ?: return@rememberLauncherForActivityResult
-            exported = null
-            if (uri != null) {
-                scope.launch {
-                    withContext(Dispatchers.IO) { context.contentResolver.openOutputStream(uri)!!.use { it.write(file) } }
-                    Toast.makeText(context, resources.getQuantityString(R.plurals.exported, count, count), Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
     val open =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri != null) {
@@ -117,18 +100,8 @@ fun rememberBackup(): Backup {
             )
         }
 
-        Dialog.Export -> {
-            PasswordDialog(R.string.export_title, R.string.export_password_body, R.string.export, { dialog = null }) { password ->
-                scope.launch {
-                    val entries = app.keys.export(app.credentials.all().executeAsList()) ?: return@launch
-                    exported = withContext(Dispatchers.Default) { encodeBackup(entries, password) } to entries.size
-                    save.launch(FILE_NAME)
-                }
-            }
-        }
-
         is Dialog.Import -> {
-            PasswordDialog(R.string.import_title, null, R.string.import_action, { dialog = null }) { restore(shown.file, it) }
+            PasswordDialog(R.string.import_title, R.string.import_action, { dialog = null }) { restore(shown.file, it) }
         }
 
         null -> {}
@@ -146,7 +119,7 @@ fun rememberBackup(): Backup {
                 }
             }
         },
-        onExport = { dialog = Dialog.Export },
+        onExport = onExport,
         onImport = { open.launch(arrayOf("*/*")) },
     )
 }
@@ -154,7 +127,6 @@ fun rememberBackup(): Backup {
 @Composable
 private fun PasswordDialog(
     title: Int,
-    body: Int?,
     action: Int,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
@@ -168,7 +140,6 @@ private fun PasswordDialog(
                 value = password,
                 onValueChange = { password = it },
                 label = { Text(stringResource(R.string.password)) },
-                supportingText = body?.let { { Text(stringResource(it)) } },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),

@@ -188,6 +188,8 @@ class AndroidKeyStore(
         wrap.writeBytes(key.public + unlocked.iv + unlocked.doFinal(key.private))
     }
 
+    fun exportable(id: ByteArray) = File(copies, id.toHexString()).exists()
+
     suspend fun export(credentials: List<Credential>): List<BackupEntry>? {
         val file = wrap.readBytes()
         val cipher = Cipher.getInstance(GCM)
