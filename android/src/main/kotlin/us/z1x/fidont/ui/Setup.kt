@@ -3,6 +3,7 @@ package us.z1x.fidont.ui
 import android.app.KeyguardManager
 import android.content.ComponentName
 import android.content.Intent
+import android.credentials.CredentialManager
 import android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import android.provider.Settings
@@ -12,7 +13,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.credentials.CredentialManager
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import us.z1x.fidont.transport.provider.ProviderService
 
@@ -32,7 +32,7 @@ fun rememberSetup(): Setup {
     LifecycleResumeEffect(Unit) {
         val service = ComponentName(context, ProviderService::class.java)
         secure = context.getSystemService(KeyguardManager::class.java).isDeviceSecure
-        provider = context.getSystemService(android.credentials.CredentialManager::class.java).isEnabledCredentialProviderService(service)
+        provider = context.getSystemService(CredentialManager::class.java).isEnabledCredentialProviderService(service)
         onPauseOrDispose {}
     }
 
@@ -44,6 +44,7 @@ fun rememberSetup(): Setup {
             intent.putExtra(Settings.EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED, BIOMETRIC_STRONG or DEVICE_CREDENTIAL)
             context.startActivity(intent)
         },
-        onProvider = { CredentialManager.create(context).createSettingsPendingIntent().send() },
+        // the provider action asks to replace the preferred service, this one only opens the list
+        onProvider = { context.startActivity(Intent(Settings.ACTION_SYNC_SETTINGS)) },
     )
 }
