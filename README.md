@@ -1,16 +1,16 @@
-# fidont <img src="icon.svg" alt="fidont icon" width="48" height="48" align="right">
+# <img src="icon.svg" alt="" width="36" height="36" align="absmiddle"> fidont
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="https://www.shieldcn.dev/github/downloads/Z1xus/fidont.svg?variant=secondary&amp;size=xs&amp;mode=dark"><img alt="Total downloads" src="https://www.shieldcn.dev/github/downloads/Z1xus/fidont.svg?variant=secondary&amp;size=xs&amp;mode=light"></picture>
 <picture><source media="(prefers-color-scheme: dark)" srcset="https://www.shieldcn.dev/github/last-commit/Z1xus/fidont.svg?variant=secondary&amp;size=xs&amp;mode=dark"><img alt="Last commit" src="https://www.shieldcn.dev/github/last-commit/Z1xus/fidont.svg?variant=secondary&amp;size=xs&amp;mode=light"></picture>
 
-use your android phone as a fido2/webauthn key
+stop paying for yubikeys, use your android phone as a fido2/webauthn key instead
 
-| where | how |
-| --- | --- |
-| apps and sites on the phone | passkey provider |
-| a browser on another device | scan its passkey qr code in the app |
-| nfc readers | tap the phone |
-| anything that only takes a usb key | the [dongle](#dongle) |
+it works as:
+
+- a passkey provider for apps and sites on the phone itself
+- a key for browsers on other devices, you scan their passkey qr code with the app
+- an nfc key, just tap the phone on a reader
+- a usb key for everything else, through the [dongle](#dongle)
 
 keys live in strongbox (the tee if your phone doesn't have strongbox) and you can't get them out, the phone asks for your fingerprint or pin each time it signs something.  
 but there is no sync and no backup either, so if you lose the phone or remove the screen lock the keys are GONE and you should really register a second key wherever you use this
