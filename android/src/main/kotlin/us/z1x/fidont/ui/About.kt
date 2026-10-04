@@ -41,11 +41,20 @@ private val LIBRARIES =
             ),
     )
 
+private const val CLOUDFLARE_PRIVACY = "https://www.cloudflare.com/privacypolicy/"
+
 private val PRIVACY =
     listOf(
-        R.string.privacy_phone to R.string.privacy_phone_body,
-        R.string.privacy_relay to R.string.privacy_relay_body,
+        R.string.privacy_collection to R.string.privacy_collection_body,
+        R.string.privacy_storage to R.string.privacy_storage_body,
+        R.string.privacy_network to R.string.privacy_network_body,
         R.string.privacy_dongle to R.string.privacy_dongle_body,
+    )
+
+private val PERMISSIONS =
+    listOf(
+        R.string.privacy_camera to R.string.privacy_camera_body,
+        R.string.privacy_nearby to R.string.privacy_nearby_body,
     )
 
 @Composable
@@ -60,6 +69,12 @@ fun PrivacyScreen(onBack: () -> Unit) {
                 }
             }
         }
+        item { SectionHeader(R.string.privacy_permissions) }
+        PERMISSIONS.forEachIndexed { index, (title, body) ->
+            item { Entry(index, PERMISSIONS.size, stringResource(title), supporting = stringResource(body)) }
+        }
+        item { SectionHeader(R.string.privacy_third_parties) }
+        item { Entry(0, 1, stringResource(R.string.privacy_cloudflare), onClick = { links.openUri(CLOUDFLARE_PRIVACY) }) }
         item { SectionHeader(R.string.privacy_contact) }
         item { Entry(0, 1, AUTHOR.removePrefix("https://"), onClick = { links.openUri(AUTHOR) }) }
     }
@@ -68,7 +83,7 @@ fun PrivacyScreen(onBack: () -> Unit) {
 @Composable
 fun LicensesScreen(onBack: () -> Unit) {
     val links = LocalUriHandler.current
-    Page(R.string.open_source, onBack) {
+    Page(R.string.licenses, onBack) {
         LIBRARIES.forEach { (title, libraries) ->
             item { SectionHeader(title) }
             libraries.forEachIndexed { index, library ->

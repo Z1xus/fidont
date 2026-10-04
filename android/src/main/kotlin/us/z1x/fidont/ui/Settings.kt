@@ -1,5 +1,6 @@
 package us.z1x.fidont.ui
 
+import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -38,13 +39,16 @@ fun Settings(
             .getPackageInfo(context.packageName, 0)
             .versionName
             .orEmpty()
-    SettingsScreen(theme, version, preferences::setTheme, onBack, onPrivacy, onLicenses)
+    val strongBox = context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
+    SettingsScreen(theme, version, strongBox, rememberSetup(), preferences::setTheme, onBack, onPrivacy, onLicenses)
 }
 
 @Composable
 fun SettingsScreen(
     theme: ThemeMode,
     version: String,
+    strongBox: Boolean,
+    setup: Setup,
     onTheme: (ThemeMode) -> Unit,
     onBack: () -> Unit,
     onPrivacy: () -> Unit,
@@ -53,6 +57,19 @@ fun SettingsScreen(
     val links = LocalUriHandler.current
     val labels = listOf(R.string.theme_system, R.string.theme_light, R.string.theme_dark)
     Page(R.string.settings, onBack) {
+        item { SectionHeader(R.string.security) }
+        item {
+            val storage = if (strongBox) R.string.storage_strongbox else R.string.storage_tee
+            Step(R.drawable.ic_key, R.string.storage, storage, true, 0, 3, {})
+        }
+        item {
+            val state = if (setup.secure) R.string.on else R.string.screen_lock_off
+            Step(R.drawable.ic_lock, R.string.screen_lock, state, setup.secure, 1, 3, setup.onLock)
+        }
+        item {
+            val state = if (setup.provider) R.string.on else R.string.off
+            Step(R.drawable.ic_shield, R.string.provider, state, setup.provider, 2, 3, setup.onProvider)
+        }
         item { SectionHeader(R.string.appearance) }
         item {
             GroupItem(0, 1) {
@@ -76,20 +93,12 @@ fun SettingsScreen(
             Entry(
                 1,
                 6,
-                stringResource(R.string.open_source),
-                supporting = stringResource(R.string.open_source_body),
-                onClick = onLicenses,
-            )
-        }
-        item {
-            Entry(
-                2,
-                6,
                 stringResource(R.string.license),
                 supporting = LICENSE,
                 onClick = { links.openUri("$REPOSITORY/blob/main/LICENSE") },
             )
         }
+        item { Entry(2, 6, stringResource(R.string.licenses), onClick = onLicenses) }
         item {
             Entry(
                 3,
