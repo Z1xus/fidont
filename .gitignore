@@ -4,5 +4,4 @@ build/
 local.properties
 /firmware/sdkconfig
 /firmware/managed_components/
-/firmware/dependencies.lock
 /android/src/main/assets/firmware.bin
