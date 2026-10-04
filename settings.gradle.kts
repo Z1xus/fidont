@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "fidont"
-include(":core")
+include(":core", ":android")

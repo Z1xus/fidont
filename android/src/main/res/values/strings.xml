@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">fidont</string>
+    <string name="nfc_description">Security key</string>
+    <string name="provider_account">This phone</string>
+
+    <string name="prompt_create">Create passkey for %1$s</string>
+    <string name="prompt_sign_in">Sign in to %1$s</string>
+    <string name="prompt_choose">Choose an account</string>
+
+    <string name="lock_title">Set a screen lock</string>
+    <string name="lock_body">Passkeys need a PIN, pattern, or fingerprint.</string>
+    <string name="provider_title">Turn on fidont</string>
+    <string name="provider_body">Let apps and sites save passkeys here.</string>
+    <string name="open_settings">Open settings</string>
+
+    <string name="passkeys">Passkeys</string>
+    <string name="passkeys_empty">No passkeys</string>
+    <string name="passkeys_empty_body">Create one on a site or app that supports passkeys.</string>
+    <string name="delete">Delete</string>
+    <string name="delete_title">Delete passkey for %1$s?</string>
+    <string name="delete_body">You can\'t undo this.</string>
+    <string name="cancel">Cancel</string>
+
+    <string name="scan">Scan QR code</string>
+    <string name="scan_hint">Point the camera at the QR code on your computer.</string>
+    <string name="scan_permissions">Allow camera and Bluetooth access to scan.</string>
+    <string name="allow">Allow</string>
+    <string name="scan_connecting">Connecting…</string>
+    <string name="scan_failed">Couldn\'t connect. Turn on Bluetooth and stay near the computer.</string>
+    <string name="back">Back</string>
+
+    <string name="dongle">Dongle</string>
+    <string name="dongle_none">Plug an ESP32-S3 board into this phone.</string>
+    <string name="dongle_found">Board found.</string>
+    <string name="dongle_set_up">Set up</string>
+    <string name="dongle_setting_up">Setting up…</string>
+    <string name="dongle_failed">Couldn\'t set up. Hold BOOT while you plug in the board, then try again.</string>
+    <string name="dongle_pair">Pair over Bluetooth</string>
+    <string name="dongle_pairing">Pairing…</string>
+    <string name="dongle_pair_failed">No dongle found. Plug it into a computer and try again.</string>
+    <string name="dongle_connected">Connected</string>
+    <string name="dongle_searching">Not connected</string>
+    <string name="dongle_updating">Updating…</string>
+    <string name="dongle_bluetooth">Allow Bluetooth</string>
+    <string name="dongle_forget">Forget</string>
+    <string name="dongle_forget_title">Forget dongle?</string>
+    <string name="dongle_forget_body">Set it up again to use it.</string>
+</resources>
