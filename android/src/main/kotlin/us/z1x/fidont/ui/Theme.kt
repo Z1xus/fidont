@@ -16,7 +16,7 @@ import us.z1x.fidont.app
 fun Theme(
     dark: Boolean = isSystemInDarkTheme(),
     black: Boolean = false,
-    dynamic: Boolean = true,
+    dynamic: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current

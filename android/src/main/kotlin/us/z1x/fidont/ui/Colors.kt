@@ -4,7 +4,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
-// tonal spot scheme of the icon's #7FE3C4
+// tonal spot scheme of the icon's #7FE3C4, the dark accent and surfaces use the icon colors themselves
 val LightColors =
     lightColorScheme(
         primary = Color(0xFF126B56),
@@ -54,7 +54,7 @@ val LightColors =
 
 val DarkColors =
     darkColorScheme(
-        primary = Color(0xFF87D6BC),
+        primary = Color(0xFF7FE3C4),
         onPrimary = Color(0xFF00382B),
         primaryContainer = Color(0xFF005140),
         onPrimaryContainer = Color(0xFFA3F2D7),
@@ -67,24 +67,24 @@ val DarkColors =
         onTertiary = Color(0xFF0D3446),
         tertiaryContainer = Color(0xFF284B5D),
         onTertiaryContainer = Color(0xFFC4E7FF),
-        background = Color(0xFF0F1512),
+        background = Color(0xFF051612),
         onBackground = Color(0xFFDEE4E0),
-        surface = Color(0xFF0F1512),
+        surface = Color(0xFF051612),
         onSurface = Color(0xFFDEE4E0),
-        surfaceVariant = Color(0xFF3F4945),
+        surfaceVariant = Color(0xFF354B44),
         onSurfaceVariant = Color(0xFFBFC9C3),
-        surfaceTint = Color(0xFF87D6BC),
+        surfaceTint = Color(0xFF7FE3C4),
         inverseSurface = Color(0xFFDEE4E0),
         inverseOnSurface = Color(0xFF2B322F),
-        outline = Color(0xFF89938E),
-        outlineVariant = Color(0xFF3F4945),
-        surfaceBright = Color(0xFF343B38),
-        surfaceContainer = Color(0xFF1B211E),
-        surfaceContainerHigh = Color(0xFF252B29),
-        surfaceContainerHighest = Color(0xFF303633),
-        surfaceContainerLow = Color(0xFF171D1A),
-        surfaceContainerLowest = Color(0xFF090F0D),
-        surfaceDim = Color(0xFF0F1512),
+        outline = Color(0xFF7E968E),
+        outlineVariant = Color(0xFF354B44),
+        surfaceBright = Color(0xFF2B3D37),
+        surfaceContainer = Color(0xFF12241F),
+        surfaceContainerHigh = Color(0xFF1B2D28),
+        surfaceContainerHighest = Color(0xFF263833),
+        surfaceContainerLow = Color(0xFF0D1F1A),
+        surfaceContainerLowest = Color(0xFF01110D),
+        surfaceDim = Color(0xFF051612),
         primaryFixed = Color(0xFFA3F2D7),
         primaryFixedDim = Color(0xFF87D6BC),
         onPrimaryFixed = Color(0xFF002018),

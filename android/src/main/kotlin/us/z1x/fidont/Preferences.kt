@@ -17,7 +17,7 @@ class Preferences(
     private val store = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
     val theme = MutableStateFlow(ThemeMode.valueOf(store.getString(THEME, null) ?: ThemeMode.System.name))
     val black = MutableStateFlow(store.getBoolean(BLACK, false))
-    val dynamic = MutableStateFlow(store.getBoolean(DYNAMIC, true))
+    val dynamic = MutableStateFlow(store.getBoolean(DYNAMIC, false))
     val onboarded = MutableStateFlow(store.getBoolean(ONBOARDED, false))
 
     fun setTheme(mode: ThemeMode) {
