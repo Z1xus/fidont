@@ -160,7 +160,7 @@ fun Page(
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(painterResource(R.drawable.ic_back), stringResource(R.string.back)) }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = scheme.surfaceContainer),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = scheme.surfaceBright),
             )
         },
     ) { padding ->

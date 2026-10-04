@@ -151,7 +151,7 @@ fun HomeScreen(
                         Icon(painterResource(R.drawable.ic_settings), stringResource(R.string.settings))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = scheme.surfaceContainer),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = scheme.surfaceBright),
             )
         },
         floatingActionButton = {
