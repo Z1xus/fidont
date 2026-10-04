@@ -193,7 +193,7 @@ class Dongle(
         linked()
         gatt.send { frame(link.encrypt(INFO, context.app.authenticator.info)) }
         status.value = Status.Connected
-        launch { update(gatt, link, build.copyOfRange(1, build.size)) }
+        launch(Dispatchers.IO) { update(gatt, link, build.copyOfRange(1, build.size)) }
         var request: Job? = null
         while (true) {
             val message = gatt.receive()?.let(link::decrypt) ?: break
@@ -222,7 +222,7 @@ class Dongle(
         val image = context.assets.open(FIRMWARE).use { it.readBytes() }
         if (image.copyOfRange(APP_OFFSET + BUILD_OFFSET, APP_OFFSET + BUILD_OFFSET + BUILD_SIZE).contentEquals(build)) return
         val size = image.size - APP_OFFSET
-        gatt.send { frame(link.encrypt(UPDATE_BEGIN, ByteArray(4) { (size shr 8 * it).toByte() })) }
+        gatt.send { frame(link.encrypt(UPDATE_BEGIN, ByteArray(0))) }
         for (offset in APP_OFFSET until image.size step UPDATE_CHUNK) {
             val chunk = image.copyOfRange(offset, min(offset + UPDATE_CHUNK, image.size))
             if (!gatt.send { frame(link.encrypt(UPDATE_DATA, chunk)) }) return
