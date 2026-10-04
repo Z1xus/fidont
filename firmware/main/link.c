@@ -7,12 +7,9 @@
 #include "freertos/semphr.h"
 #include "host/ble_hs.h"
 #include "host/util/util.h"
-#include "mbedtls/ecdh.h"
-#include "mbedtls/gcm.h"
-#include "mbedtls/hkdf.h"
-#include "mbedtls/sha256.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
+#include "psa/crypto.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 
@@ -71,31 +68,37 @@ static uint8_t outgoing[MAX_FRAME];
 
 static int on_gap(struct ble_gap_event *event, void *arg);
 
-static int random_bytes(void *context, unsigned char *buffer, size_t size)
-{
-    esp_fill_random(buffer, size);
-    return 0;
-}
-
 static void derive(const uint8_t *key, const uint8_t *salt, size_t salt_size, const char *info, uint8_t *output,
                    size_t size)
 {
-    mbedtls_hkdf(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), salt, salt_size, key, KEY_SIZE, (const uint8_t *)info,
-                 strlen(info), output, size);
+    psa_key_derivation_operation_t operation = PSA_KEY_DERIVATION_OPERATION_INIT;
+    psa_key_derivation_setup(&operation, PSA_ALG_HKDF(PSA_ALG_SHA_256));
+    psa_key_derivation_input_bytes(&operation, PSA_KEY_DERIVATION_INPUT_SALT, salt, salt_size);
+    psa_key_derivation_input_bytes(&operation, PSA_KEY_DERIVATION_INPUT_SECRET, key, KEY_SIZE);
+    psa_key_derivation_input_bytes(&operation, PSA_KEY_DERIVATION_INPUT_INFO, (const uint8_t *)info, strlen(info));
+    psa_key_derivation_output_bytes(&operation, output, size);
+    psa_key_derivation_abort(&operation);
 }
 
-static bool crypt(int mode, const uint8_t *key, uint32_t count, uint8_t *data, size_t size, uint8_t *tag)
+// the tag follows the data
+static bool crypt(bool encrypt, const uint8_t *key, uint32_t count, uint8_t *data, size_t size)
 {
     uint8_t nonce[NONCE_SIZE] = {[8] = count >> 24, count >> 16, count >> 8, count};
-    mbedtls_gcm_context gcm;
-    mbedtls_gcm_init(&gcm);
-    mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, key, KEY_SIZE * 8);
-    int result =
-        mode == MBEDTLS_GCM_ENCRYPT
-            ? mbedtls_gcm_crypt_and_tag(&gcm, mode, size, nonce, NONCE_SIZE, NULL, 0, data, data, TAG_SIZE, tag)
-            : mbedtls_gcm_auth_decrypt(&gcm, size, nonce, NONCE_SIZE, NULL, 0, tag, TAG_SIZE, data, data);
-    mbedtls_gcm_free(&gcm);
-    return result == 0;
+    psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+    psa_key_id_t id;
+    size_t written;
+    psa_set_key_type(&attributes, PSA_KEY_TYPE_AES);
+    psa_set_key_algorithm(&attributes, PSA_ALG_GCM);
+    psa_set_key_usage_flags(&attributes, encrypt ? PSA_KEY_USAGE_ENCRYPT : PSA_KEY_USAGE_DECRYPT);
+    if (psa_import_key(&attributes, key, KEY_SIZE, &id) != PSA_SUCCESS) {
+        return false;
+    }
+    psa_status_t status = encrypt ? psa_aead_encrypt(id, PSA_ALG_GCM, nonce, NONCE_SIZE, NULL, 0, data, size, data,
+                                                     size + TAG_SIZE, &written)
+                                  : psa_aead_decrypt(id, PSA_ALG_GCM, nonce, NONCE_SIZE, NULL, 0, data, size + TAG_SIZE,
+                                                     data, size, &written);
+    psa_destroy_key(id);
+    return status == PSA_SUCCESS;
 }
 
 static bool notify(const uint8_t *data, size_t size)
@@ -129,9 +132,7 @@ static bool send(uint8_t type, const uint8_t *data, size_t size)
     outgoing[1] = body >> 8;
     outgoing[FRAME_HEADER] = type;
     memcpy(outgoing + FRAME_HEADER + 1, data, size);
-    bool sent = session.keyed &&
-                crypt(MBEDTLS_GCM_ENCRYPT, session.tx_key, session.sent++, outgoing + FRAME_HEADER, 1 + size,
-                      outgoing + FRAME_HEADER + 1 + size) &&
+    bool sent = session.keyed && crypt(true, session.tx_key, session.sent++, outgoing + FRAME_HEADER, 1 + size) &&
                 notify(outgoing, FRAME_HEADER + body);
     xSemaphoreGive(sending);
     return sent;
@@ -141,37 +142,27 @@ bool link_send(uint8_t type, const uint8_t *data, size_t size) { return session.
 
 static bool pair(const uint8_t *phone_key, uint8_t *dongle_key)
 {
-    mbedtls_ecp_group group;
-    mbedtls_ecp_point public, peer;
-    mbedtls_mpi private, shared;
-    mbedtls_ecp_group_init(&group);
-    mbedtls_ecp_point_init(&public);
-    mbedtls_ecp_point_init(&peer);
-    mbedtls_mpi_init(&private);
-    mbedtls_mpi_init(&shared);
-
+    psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+    psa_key_id_t id;
     uint8_t point[KEY_SIZE];
     uint8_t salt[2 * POINT_SIZE];
     size_t written;
-    bool done = mbedtls_ecp_group_load(&group, MBEDTLS_ECP_DP_SECP256R1) == 0 &&
-                mbedtls_ecp_point_read_binary(&group, &peer, phone_key, POINT_SIZE) == 0 &&
-                mbedtls_ecp_check_pubkey(&group, &peer) == 0 &&
-                mbedtls_ecdh_gen_public(&group, &private, &public, random_bytes, NULL) == 0 &&
-                mbedtls_ecp_point_write_binary(&group, &public, MBEDTLS_ECP_PF_UNCOMPRESSED, &written, dongle_key,
-                                               POINT_SIZE) == 0 &&
-                mbedtls_ecdh_compute_shared(&group, &shared, &peer, &private, random_bytes, NULL) == 0 &&
-                mbedtls_mpi_write_binary(&shared, point, sizeof(point)) == 0;
+    psa_set_key_type(&attributes, PSA_KEY_TYPE_ECC_KEY_PAIR(PSA_ECC_FAMILY_SECP_R1));
+    psa_set_key_bits(&attributes, KEY_SIZE * 8);
+    psa_set_key_algorithm(&attributes, PSA_ALG_ECDH);
+    psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_DERIVE);
+    if (psa_generate_key(&attributes, &id) != PSA_SUCCESS) {
+        return false;
+    }
+    bool done =
+        psa_export_public_key(id, dongle_key, POINT_SIZE, &written) == PSA_SUCCESS &&
+        psa_raw_key_agreement(PSA_ALG_ECDH, id, phone_key, POINT_SIZE, point, sizeof(point), &written) == PSA_SUCCESS;
+    psa_destroy_key(id);
     if (done) {
         memcpy(salt, phone_key, POINT_SIZE);
         memcpy(salt + POINT_SIZE, dongle_key, POINT_SIZE);
         derive(point, salt, sizeof(salt), "fidont pair", paired_secret, SECRET_SIZE);
     }
-
-    mbedtls_ecp_group_free(&group);
-    mbedtls_ecp_point_free(&public);
-    mbedtls_ecp_point_free(&peer);
-    mbedtls_mpi_free(&private);
-    mbedtls_mpi_free(&shared);
     return done;
 }
 
@@ -211,9 +202,7 @@ static void receive(uint8_t *body, size_t size)
         hello(body, size);
         return;
     }
-    if (size <= TAG_SIZE ||
-        !crypt(MBEDTLS_GCM_DECRYPT, session.rx_key, session.received++, body, size - TAG_SIZE,
-               body + size - TAG_SIZE) ||
+    if (size <= TAG_SIZE || !crypt(false, session.rx_key, session.received++, body, size - TAG_SIZE) ||
         (!session.ready && body[0] != LINK_INFO)) {
         ble_gap_terminate(connection, BLE_ERR_REM_USER_CONN_TERM);
         return;
@@ -272,7 +261,8 @@ static void advertise(void)
     uint8_t data[UUID_SIZE + ID_SIZE] = {UUID(0)};
     if (paired) {
         uint8_t hash[KEY_SIZE];
-        mbedtls_sha256(secret, SECRET_SIZE, hash, 0);
+        size_t written;
+        psa_hash_compute(PSA_ALG_SHA_256, secret, SECRET_SIZE, hash, sizeof(hash), &written);
         memcpy(data + UUID_SIZE, hash, ID_SIZE);
     }
     struct ble_hs_adv_fields fields = {
@@ -339,6 +329,7 @@ void link_start(void)
     paired = store_secret(secret);
     sending = xSemaphoreCreateMutex();
     ESP_ERROR_CHECK(esp_timer_create(&timer, &auth_timer));
+    ESP_ERROR_CHECK(psa_crypto_init());
     ESP_ERROR_CHECK(nimble_port_init());
     ble_hs_cfg.sync_cb = on_sync;
     ble_svc_gap_init();

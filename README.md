@@ -55,7 +55,7 @@ then set `RELAY` in [`Hybrid.kt`](core/src/commonMain/kotlin/us/z1x/fidont/hybri
 needs jdk 17+, the android sdk, go and docker. the firmware goes first because the app bundles it
 
 ```sh
-docker run --rm -v "$PWD:/project" -w /project/firmware espressif/idf:v5.5.5 \
+docker run --rm -v "$PWD:/project" -w /project/firmware espressif/idf:v6.1 \
     idf.py build merge-bin -o ../../android/src/main/assets/firmware.bin
 ./gradlew :android:assembleDebug
 go build -C relay
