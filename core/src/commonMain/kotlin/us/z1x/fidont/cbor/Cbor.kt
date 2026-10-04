@@ -105,7 +105,8 @@ object Cbor {
                 2 -> take(count(value))
                 3 -> take(count(value)).decodeToString()
                 4 -> List(count(value)) { read() }
-                else -> buildMap { repeat(count(value)) { put(read(), read()) } }
+                5 -> buildMap { repeat(count(value)) { put(read(), read()) } }
+                else -> throw IllegalArgumentException()
             }
         }
 

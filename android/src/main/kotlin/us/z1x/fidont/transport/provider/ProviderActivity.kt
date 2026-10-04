@@ -24,6 +24,7 @@ import us.z1x.fidont.app
 import us.z1x.fidont.cbor.Cbor
 import us.z1x.fidont.ctap2.CtapException
 import us.z1x.fidont.ctap2.ES256
+import us.z1x.fidont.ctap2.UNSUPPORTED_ALGORITHM
 import us.z1x.fidont.sha256
 
 private const val CREATE = "webauthn.create"
@@ -58,6 +59,8 @@ class ProviderActivity : ComponentActivity() {
             return null
         } catch (_: JSONException) {
             return null
+        } catch (_: IllegalArgumentException) {
+            return null
         } catch (_: IllegalStateException) {
             // the caller claims a web origin but is not a trusted browser
             return null
@@ -70,6 +73,10 @@ class ProviderActivity : ComponentActivity() {
         val options = JSONObject(call.requestJson)
         val user = options.getJSONObject("user")
         val exclude = options.optJSONArray("excludeCredentials") ?: JSONArray()
+        val algorithms = options.getJSONArray("pubKeyCredParams")
+        if ((0 until algorithms.length()).none { algorithms.getJSONObject(it).getLong("alg") == ES256 }) {
+            throw CtapException(UNSUPPORTED_ALGORITHM)
+        }
         val (clientData, clientDataHash) =
             clientData(CREATE, options.getString("challenge"), request.callingAppInfo, call.clientDataHash)
         val registration =

@@ -17,6 +17,7 @@ import androidx.credentials.provider.CreateEntry
 import androidx.credentials.provider.CredentialProviderService
 import androidx.credentials.provider.ProviderClearCredentialStateRequest
 import androidx.credentials.provider.PublicKeyCredentialEntry
+import org.json.JSONException
 import org.json.JSONObject
 import us.z1x.fidont.R
 import us.z1x.fidont.app
@@ -40,14 +41,20 @@ class ProviderService : CredentialProviderService() {
         callback: OutcomeReceiver<BeginGetCredentialResponse, GetCredentialException>,
     ) {
         val entries =
-            request.beginGetCredentialOptions.filterIsInstance<BeginGetPublicKeyCredentialOption>().flatMap { option ->
-                credentials(JSONObject(option.requestJson)).map { credential ->
-                    val intent = Intent(this, ProviderActivity::class.java).putExtra(CREDENTIAL_ID, credential.id)
-                    PublicKeyCredentialEntry
-                        .Builder(this, credential.userName, activity(intent, credential.id.contentHashCode()), option)
-                        .setDisplayName(credential.displayName)
-                        .build()
+            try {
+                request.beginGetCredentialOptions.filterIsInstance<BeginGetPublicKeyCredentialOption>().flatMap { option ->
+                    credentials(JSONObject(option.requestJson)).map { credential ->
+                        val intent = Intent(this, ProviderActivity::class.java).putExtra(CREDENTIAL_ID, credential.id)
+                        PublicKeyCredentialEntry
+                            .Builder(this, credential.userName, activity(intent, credential.id.contentHashCode()), option)
+                            .setDisplayName(credential.displayName)
+                            .build()
+                    }
                 }
+            } catch (_: JSONException) {
+                emptyList()
+            } catch (_: IllegalArgumentException) {
+                emptyList()
             }
         callback.onResult(BeginGetCredentialResponse(entries))
     }

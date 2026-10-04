@@ -81,6 +81,8 @@ fun decodeBackup(
         null
     } catch (_: IndexOutOfBoundsException) {
         null
+    } catch (_: NullPointerException) {
+        null
     }
 
 fun sealTo(
