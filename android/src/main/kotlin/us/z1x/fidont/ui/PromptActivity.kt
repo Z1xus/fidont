@@ -13,11 +13,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CompletableDeferred
@@ -92,14 +94,22 @@ class PromptActivity : ComponentActivity() {
         ModalBottomSheet(onDismissRequest = { request.result.complete(null) }) {
             Text(
                 stringResource(R.string.prompt_choose),
-                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                style = MaterialTheme.typography.titleLarge,
+                Modifier.padding(horizontal = 24.dp),
+                style = MaterialTheme.typography.headlineSmall,
+            )
+            Text(
+                request.credentials.first().rpId,
+                Modifier.padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyLarge,
             )
             request.credentials.forEach { credential ->
                 ListItem(
                     headlineContent = { Text(credential.userName) },
-                    supportingContent = { Text(credential.displayName) },
-                    modifier = Modifier.clickable { request.result.complete(credential) },
+                    supportingContent = credential.displayName.takeIf { it.isNotEmpty() }?.let { { Text(it) } },
+                    leadingContent = { Avatar(credential.userName) },
+                    modifier = Modifier.clickable { request.result.complete(credential) }.padding(horizontal = 8.dp),
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 )
             }
         }
