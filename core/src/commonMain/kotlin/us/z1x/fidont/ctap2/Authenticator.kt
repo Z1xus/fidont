@@ -43,7 +43,7 @@ private const val SALT_AUTH_SIZE = 16
 private const val CREDENTIAL_ID_SIZE = 32
 private const val MAX_MESSAGE_SIZE = 4096
 private const val MAX_ALLOW_LIST = 16
-private val AAGUID = "c7a14cb5fe7040498b465283497c355a".hexToByteArray()
+private val AAGUID = "f1d0badc0def4f1d8badc0def1d0badc".hexToByteArray()
 
 // a probe cannot unlock the key, and the platform only reads which credential answered
 private val PROBE_SIGNATURE = "3006020101020101".hexToByteArray()
