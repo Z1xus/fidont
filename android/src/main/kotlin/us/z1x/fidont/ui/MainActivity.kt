@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(bars, bars)
                 onDispose {}
             }
-            Theme(dark) {
+            AppTheme {
                 AnimatedContent(
                     targetState = onboarded,
                     modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainer),

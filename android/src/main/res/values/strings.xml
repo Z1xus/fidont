@@ -8,16 +8,15 @@
     <string name="prompt_sign_in">Sign in to %1$s</string>
     <string name="prompt_choose">Choose an account</string>
 
-    <string name="onboarding_welcome">Your phone is the key</string>
-    <string name="onboarding_welcome_body">Sign in with passkeys from this phone, in apps, on websites, and on other computers.</string>
+    <string name="onboarding_welcome">Sign in with this phone</string>
+    <string name="onboarding_welcome_body">fidont keeps your passkeys here and signs you in to apps, websites, and other computers.</string>
     <string name="onboarding_safe">Keys stay on this phone</string>
-    <string name="onboarding_safe_body">They live in the phone\'s secure hardware. Every sign-in needs your fingerprint or PIN.</string>
+    <string name="onboarding_safe_body">They live in the phone\'s secure hardware, and the phone asks for your fingerprint or PIN each time you sign in.</string>
     <string name="onboarding_setup">Two things to turn on</string>
     <string name="onboarding_ready">You\'re all set</string>
     <string name="next">Next</string>
     <string name="skip">Skip</string>
     <string name="start">Get started</string>
-    <string name="done">Done</string>
 
     <string name="setup">Finish setup</string>
     <string name="lock_title">Set a screen lock</string>
@@ -90,6 +89,10 @@
     <string name="theme_system">System</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
+    <string name="pure_black">Pure black</string>
+    <string name="pure_black_body">Black background in dark theme</string>
+    <string name="material_you">Material You</string>
+    <string name="material_you_body">Colors from your wallpaper</string>
     <string name="about">About</string>
     <string name="privacy">Privacy policy</string>
     <string name="license">License</string>

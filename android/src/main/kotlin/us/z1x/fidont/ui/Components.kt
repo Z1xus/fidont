@@ -1,10 +1,5 @@
 package us.z1x.fidont.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -146,11 +141,6 @@ fun Step(
         modifier = modifier,
         supporting = stringResource(body),
         leading = { IconBadge(icon, if (done) scheme.primaryContainer else scheme.errorContainer) },
-        trailing = {
-            AnimatedVisibility(done, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
-                Icon(painterResource(R.drawable.ic_check), stringResource(R.string.done), tint = scheme.primary)
-            }
-        },
         onClick = onClick.takeUnless { done },
     )
 }

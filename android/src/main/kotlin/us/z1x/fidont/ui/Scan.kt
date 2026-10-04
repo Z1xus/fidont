@@ -15,11 +15,6 @@ import androidx.camera.lifecycle.awaitInstance
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -203,7 +198,7 @@ fun ScanScreen(
                         }
 
                         ScanState.Done -> {
-                            Message(R.string.scan_done, icon = R.drawable.ic_check)
+                            Message(R.string.scan_done, icon = R.drawable.ic_key)
                         }
 
                         else -> {
@@ -252,14 +247,8 @@ private fun Message(
 private fun Viewfinder(state: ScanState) {
     val found = state == ScanState.Connecting || state == ScanState.Done
     val color by animateColorAsState(if (found) MaterialTheme.colorScheme.primaryFixed else Color.White, label = "frame")
-    val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(
-        initialValue = 1f,
-        targetValue = 1.04f,
-        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
-        label = "pulse",
-    )
     Canvas(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
-        val side = minOf(size.width, size.height) * FRAME * if (state == ScanState.Scanning) pulse else 1f
+        val side = minOf(size.width, size.height) * FRAME
         val corner = CornerRadius(28.dp.toPx())
         val origin = Offset((size.width - side) / 2, (size.height - side) / 2)
         drawRect(Color.Black.copy(alpha = SCRIM))

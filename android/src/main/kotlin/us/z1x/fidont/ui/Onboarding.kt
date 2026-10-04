@@ -3,15 +3,8 @@ package us.z1x.fidont.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -86,19 +79,11 @@ fun OnboardingScreen(
     val ready = secure && provider
     val preview = LocalInspectionMode.current
     val entrance = remember { Animatable(if (preview) 1f else 0f) }
-    val float =
-        rememberInfiniteTransition(label = "float").animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(2400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-            label = "float",
-        )
-    val done = animateFloatAsState(if (ready) 1f else 0f, spring(Spring.DampingRatioMediumBouncy), label = "done")
     // read in the draw phase, so a swipe does not recompose the screen on every frame
     val position = { pager.currentPage + pager.currentPageOffsetFraction }
 
     LaunchedEffect(Unit) {
-        entrance.animateTo(1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow))
+        entrance.animateTo(1f, spring(stiffness = Spring.StiffnessLow))
     }
     BackHandler(pager.currentPage > 0) {
         scope.launch { pager.animateScrollToPage(pager.currentPage - 1) }
@@ -115,7 +100,7 @@ fun OnboardingScreen(
                         .graphicsLayer { alpha = (LAST - position()).coerceIn(0f, 1f) },
                 enabled = pager.currentPage < LAST,
             ) { Text(stringResource(R.string.skip)) }
-            Hero(position, { float.value }, { entrance.value }, { done.value }, Modifier.fillMaxWidth().weight(1f))
+            Hero(position, { entrance.value }, Modifier.fillMaxWidth().weight(1f))
             HorizontalPager(pager, Modifier.fillMaxWidth().height(232.dp), verticalAlignment = Alignment.Top) { page ->
                 Column(
                     Modifier.fillMaxSize().graphicsLayer {
@@ -201,9 +186,7 @@ private fun Intro(
 @Composable
 fun Hero(
     position: () -> Float,
-    float: () -> Float,
     entrance: () -> Float,
-    done: () -> Float,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -218,9 +201,9 @@ fun Hero(
         val settled = (page - 1f).coerceIn(0f, 1f)
         val grown = 0.6f + 0.4f * entrance()
         val zoom = grown * (1f - 0.1f * settled)
-        drawCircle(blob, 200f * unit * (0.96f + 0.04f * float()) * grown)
+        drawCircle(blob, 200f * unit * grown)
         withTransform({
-            translate(size.width / 2, size.height / 2 + (float() - 0.5f) * 14f * unit)
+            translate(size.width / 2, size.height / 2)
             scale(zoom * unit, zoom * unit, Offset.Zero)
             translate(-PHONE_CENTER - KEY_SHIFT * key, -GRID / 2)
         }) {
@@ -235,7 +218,6 @@ fun Hero(
                 size = Size(344f, 344f),
                 style = Stroke(12f, cap = StrokeCap.Round),
             )
-            badge(scheme.primary, scheme.onPrimary, done() * settled)
         }
     }
 }
@@ -264,19 +246,6 @@ private fun DrawScope.lock(ink: Color) {
         style = Stroke(8f),
     )
     drawRoundRect(ink, Offset(PHONE_CENTER - 24f, 264f), Size(48f, 38f), CornerRadius(8f))
-}
-
-private fun DrawScope.badge(
-    fill: Color,
-    mark: Color,
-    scale: Float,
-) {
-    val center = Offset(PHONE_CENTER + 122f, GRID / 2 + 122f)
-    drawCircle(fill, 46f * scale, center)
-    val stroke = Stroke(11f * scale, cap = StrokeCap.Round)
-    val corner = center + Offset(-5f, 15f) * scale
-    drawLine(mark, center + Offset(-20f, 1f) * scale, corner, stroke.width, stroke.cap)
-    drawLine(mark, corner, center + Offset(21f, -13f) * scale, stroke.width, stroke.cap)
 }
 
 private fun blend(

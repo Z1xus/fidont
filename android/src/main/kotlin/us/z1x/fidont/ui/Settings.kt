@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -34,22 +35,41 @@ fun Settings(
     val context = LocalContext.current
     val preferences = context.app.preferences
     val theme by preferences.theme.collectAsState()
+    val black by preferences.black.collectAsState()
+    val dynamic by preferences.dynamic.collectAsState()
     val version =
         context.packageManager
             .getPackageInfo(context.packageName, 0)
             .versionName
             .orEmpty()
     val strongBox = context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
-    SettingsScreen(theme, version, strongBox, rememberSetup(), preferences::setTheme, onBack, onPrivacy, onLicenses)
+    SettingsScreen(
+        theme,
+        black,
+        dynamic,
+        version,
+        strongBox,
+        rememberSetup(),
+        preferences::setTheme,
+        preferences::setBlack,
+        preferences::setDynamic,
+        onBack,
+        onPrivacy,
+        onLicenses,
+    )
 }
 
 @Composable
 fun SettingsScreen(
     theme: ThemeMode,
+    black: Boolean,
+    dynamic: Boolean,
     version: String,
     strongBox: Boolean,
     setup: Setup,
     onTheme: (ThemeMode) -> Unit,
+    onBlack: (Boolean) -> Unit,
+    onDynamic: (Boolean) -> Unit,
     onBack: () -> Unit,
     onPrivacy: () -> Unit,
     onLicenses: () -> Unit,
@@ -72,7 +92,7 @@ fun SettingsScreen(
         }
         item { SectionHeader(R.string.appearance) }
         item {
-            GroupItem(0, 1) {
+            GroupItem(0, 3) {
                 Column(Modifier.padding(16.dp)) {
                     Text(stringResource(R.string.theme), style = MaterialTheme.typography.bodyLarge)
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = 12.dp)) {
@@ -81,11 +101,32 @@ fun SettingsScreen(
                                 selected = mode == theme,
                                 onClick = { onTheme(mode) },
                                 shape = SegmentedButtonDefaults.itemShape(index, ThemeMode.entries.size),
+                                icon = {},
                             ) { Text(stringResource(labels[index])) }
                         }
                     }
                 }
             }
+        }
+        item {
+            Entry(
+                1,
+                3,
+                stringResource(R.string.pure_black),
+                supporting = stringResource(R.string.pure_black_body),
+                trailing = { Switch(black, onCheckedChange = null) },
+                onClick = { onBlack(!black) },
+            )
+        }
+        item {
+            Entry(
+                2,
+                3,
+                stringResource(R.string.material_you),
+                supporting = stringResource(R.string.material_you_body),
+                trailing = { Switch(dynamic, onCheckedChange = null) },
+                onClick = { onDynamic(!dynamic) },
+            )
         }
         item { SectionHeader(R.string.about) }
         item { Entry(0, 6, stringResource(R.string.privacy), onClick = onPrivacy) }
