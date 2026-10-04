@@ -23,11 +23,14 @@ but there is no sync and no backup either, so if you lose the phone or remove th
 
 ## install
 
-needs android 14 or newer. grab the apk from [releases](https://github.com/Z1xus/fidont/releases) and install it. then the first launch walks you through turning it on as a passkey provider
+needs android 14 or newer.  
+grab the apk from [releases](https://github.com/Z1xus/fidont/releases) and install it.  
+then the first launch walks you through turning it on as a passkey provider
 
 ## dongle
 
-an esp32-s3 board that shows up as a usb security key and passes every request to the phone over bluetooth. it holds no keys, so if you lose it you just flash another one
+an esp32-s3 board that shows up as a usb security key and passes every request to the phone over bluetooth.  
+it holds no keys, so if you lose it you just flash another one
 
 plug the board into the phone and tap `Set up`, the app flashes and pairs it in one go.  
 and if the board isn't found, hold BOOT while plugging it in
@@ -38,7 +41,8 @@ also the phone only talks to the dongle while the app is open, so open it when s
 
 ## relay
 
-the qr flow needs a relay between the phone and the computer, the app uses mine at `cable.ahhkeysummo2d.com`. a relay only forwards encrypted messages, so it can't read them or sign in as you
+the qr flow needs a relay between the phone and the computer, the app uses mine at `cable.ahhkeysummo2d.com`.  
+a relay only forwards encrypted messages, so it can't read them or sign in as you
 
 to run your own:
 
@@ -47,12 +51,14 @@ docker build -t fidont-relay relay
 docker run -p 8080:8080 fidont-relay
 ```
 
-browsers get the domain from a relay id (256 to 65535), so you can't pick it yourself. `docker run fidont-relay -domain <id>` prints the one for your id, register it and point it at the relay with tls in front.  
+browsers get the domain from a relay id (256 to 65535), so you can't pick it yourself.  
+`docker run fidont-relay -domain <id>` prints the one for your id, register it and point it at the relay with tls in front.  
 then set `RELAY` in [`Hybrid.kt`](core/src/commonMain/kotlin/us/z1x/fidont/hybrid/Hybrid.kt) to your id
 
 ## build
 
-needs jdk 17+, the android sdk, go and docker. the firmware goes first because the app bundles it
+needs jdk 17+, the android sdk, go and docker.  
+the firmware goes first because the app bundles it
 
 ```sh
 docker run --rm -v "$PWD:/project" -w /project/firmware espressif/idf:v6.1 \
@@ -63,7 +69,9 @@ go build -C relay
 
 ## privacy
 
-the app has no accounts, ads or analytics, and passkeys never leave the phone. but the qr flow goes through my relay behind cloudflare, so both of us get to see your ip and when you connected. everything else is end-to-end encrypted and the relay doesn't log anything
+the app has no accounts or analytics (or ads), and passkeys never leave the phone.  
+but the qr flow goes through my relay behind cloudflare, so both of us get to see your ip and when you connected.  
+the messages themselves are e2ee and the relay doesn't log anything
 
 ## credits
 
