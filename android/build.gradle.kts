@@ -3,6 +3,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// every commit here starts with the same 7 characters
+val commit = providers.exec { commandLine("git", "rev-parse", "--short=12", "HEAD") }.standardOutput.asText
+
 android {
     namespace = "us.z1x.fidont"
     compileSdk = 37
@@ -13,6 +16,7 @@ android {
         targetSdk = 37
         versionCode = 3
         versionName = "0.1.2"
+        buildConfigField("String", "COMMIT", "\"${commit.get().trim()}\"")
     }
 
     buildTypes {
@@ -25,6 +29,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

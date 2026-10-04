@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import us.z1x.fidont.BuildConfig
 import us.z1x.fidont.R
 import us.z1x.fidont.ThemeMode
 import us.z1x.fidont.app
@@ -41,17 +42,13 @@ fun Settings(
     val theme by preferences.theme.collectAsState()
     val black by preferences.black.collectAsState()
     val dynamic by preferences.dynamic.collectAsState()
-    val version =
-        context.packageManager
-            .getPackageInfo(context.packageName, 0)
-            .versionName
-            .orEmpty()
     val strongBox = context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
     SettingsScreen(
         theme,
         black,
         dynamic,
-        version,
+        BuildConfig.VERSION_NAME,
+        BuildConfig.COMMIT,
         strongBox,
         rememberSetup(),
         rememberBackup(),
@@ -70,6 +67,7 @@ fun SettingsScreen(
     black: Boolean,
     dynamic: Boolean,
     version: String,
+    commit: String,
     strongBox: Boolean,
     setup: Setup,
     backup: Backup,
@@ -194,6 +192,14 @@ fun SettingsScreen(
                 onClick = { links.openUri(AUTHOR) },
             )
         }
-        item { Entry(5, 6, stringResource(R.string.version), supporting = version) }
+        item {
+            Entry(
+                5,
+                6,
+                stringResource(R.string.version),
+                supporting = "$version ($commit)",
+                onClick = { links.openUri("$REPOSITORY/commit/$commit") },
+            )
+        }
     }
 }
