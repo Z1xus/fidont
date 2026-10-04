@@ -33,11 +33,11 @@ class Hybrid(
 ) {
     suspend fun serve(
         qr: Qr,
-        connect: suspend (url: String) -> Tunnel,
+        connect: suspend (url: String) -> Tunnel?,
         advertise: (ByteArray) -> Unit,
     ): Boolean {
         val tunnelId = derive(qr.secret, ByteArray(0), TUNNEL_ID, 16)
-        val tunnel = connect("wss://${relayDomain(RELAY)}/cable/new/${tunnelId.toHexString()}")
+        val tunnel = connect("wss://${relayDomain(RELAY)}/cable/new/${tunnelId.toHexString()}") ?: return false
         val eid = byteArrayOf(0) + random(10) + tunnel.routingId + byteArrayOf(RELAY.toByte(), (RELAY shr 8).toByte())
         advertise(advert(eid, derive(qr.secret, ByteArray(0), EID_KEY, 64)))
         val handshake = tunnel.receive() ?: return false

@@ -95,7 +95,7 @@ class Authenticator(
     ): Registration {
         if (known(rpId, exclude).isNotEmpty()) throw CtapException(CREDENTIAL_EXCLUDED)
         val credential = Credential(random(CREDENTIAL_ID_SIZE), rpId, userId, userName, displayName, discoverable)
-        val publicKey = keys.generate(credential.id)
+        val publicKey = keys.generate(credential.id) ?: throw CtapException(OPERATION_DENIED)
         val authData =
             sha256(rpId.encodeToByteArray()) +
                 byteArrayOf((USER_PRESENT or USER_VERIFIED or ATTESTED).toByte()) +
