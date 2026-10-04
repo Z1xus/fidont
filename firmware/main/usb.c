@@ -167,7 +167,6 @@ void usb_packet(const uint8_t *packet)
     } else {
         size_t size = packet[5] << 8 | packet[6];
         if (packet[4] == CTAPHID_INIT) {
-            // an init on the channel of an unfinished message drops that message
             if (message.active && channel == message.channel) {
                 message.active = false;
             }

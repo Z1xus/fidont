@@ -139,7 +139,6 @@ static bool send(uint8_t type, const uint8_t *data, size_t size)
 
 bool link_send(uint8_t type, const uint8_t *data, size_t size) { return session.ready && send(type, data, size); }
 
-// both sides make a key pair, and the secret comes from the shared point
 static bool pair(const uint8_t *phone_key, uint8_t *dongle_key)
 {
     mbedtls_ecp_group group;
@@ -220,7 +219,6 @@ static void receive(uint8_t *body, size_t size)
         return;
     }
     if (!session.ready) {
-        // the phone has shown that it holds the secret
         if (pairing) {
             memcpy(secret, paired_secret, SECRET_SIZE);
             store_set_secret(secret);

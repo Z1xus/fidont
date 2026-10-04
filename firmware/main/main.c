@@ -64,7 +64,7 @@ void on_request(uint32_t channel, const uint8_t *data, size_t size)
         usb_send(channel, CTAPHID_ERROR, &error, 1);
         return;
     }
-    // the host asks for this before the phone is near, so the answer comes from the last phone session
+    // the host asks for this before the phone is near
     if (data[0] == CTAP2_GET_INFO && info_size) {
         uint8_t reply[1 + MAX_INFO] = {0};
         memcpy(reply + 1, info, info_size);

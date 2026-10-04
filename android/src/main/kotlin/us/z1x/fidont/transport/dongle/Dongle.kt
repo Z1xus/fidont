@@ -189,9 +189,8 @@ class Dongle(
         link: Link,
         linked: () -> Unit,
     ) = coroutineScope {
-        // the first message proves that the dongle holds the same secret
         val build = gatt.receive()?.let(link::decrypt)?.takeIf { it[0].toInt() == STATUS } ?: return@coroutineScope
-        // a dongle that pairs keeps the secret when it gets this, so the phone keeps it after
+        // a pairing dongle keeps the secret once it gets this, so the phone keeps it after
         if (!gatt.send { frame(link.encrypt(INFO, context.app.authenticator.info)) }) return@coroutineScope
         linked()
         status.value = Status.Connected
