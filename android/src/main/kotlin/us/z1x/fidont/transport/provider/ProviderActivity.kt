@@ -16,7 +16,9 @@ import androidx.credentials.provider.ProviderGetCredentialRequest
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import us.z1x.fidont.app
 import us.z1x.fidont.cbor.Cbor
@@ -34,24 +36,32 @@ private val SPKI_HEADER = "3059301306072a8648ce3d020106082a8648ce3d030107034200"
 class ProviderActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val create = PendingIntentHandler.retrieveProviderCreateCredentialRequest(intent)
-        val get = PendingIntentHandler.retrieveProviderGetCredentialRequest(intent)
-        lifecycleScope.launch(Dispatchers.Default) {
-            val result = Intent()
-            try {
-                when {
-                    create != null -> PendingIntentHandler.setCreateCredentialResponse(result, create(create))
-                    get != null -> PendingIntentHandler.setGetCredentialResponse(result, get(get))
-                }
-                setResult(RESULT_OK, result)
-            } catch (_: CtapException) {
-                setResult(RESULT_CANCELED)
-            } catch (_: IllegalStateException) {
-                // the caller claims a web origin but is not a trusted browser
-                setResult(RESULT_CANCELED)
-            }
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.Default) { respond() }
+            setResult(if (result == null) RESULT_CANCELED else RESULT_OK, result)
             finish()
         }
+    }
+
+    private suspend fun respond(): Intent? {
+        val create = PendingIntentHandler.retrieveProviderCreateCredentialRequest(intent)
+        val get = PendingIntentHandler.retrieveProviderGetCredentialRequest(intent)
+        val result = Intent()
+        try {
+            when {
+                create != null -> PendingIntentHandler.setCreateCredentialResponse(result, create(create))
+                get != null -> PendingIntentHandler.setGetCredentialResponse(result, get(get))
+                else -> return null
+            }
+        } catch (_: CtapException) {
+            return null
+        } catch (_: JSONException) {
+            return null
+        } catch (_: IllegalStateException) {
+            // the caller claims a web origin but is not a trusted browser
+            return null
+        }
+        return result
     }
 
     private suspend fun create(request: ProviderCreateCredentialRequest): CreatePublicKeyCredentialResponse {

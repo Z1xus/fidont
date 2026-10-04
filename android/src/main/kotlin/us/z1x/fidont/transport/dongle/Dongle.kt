@@ -65,6 +65,7 @@ private val NOTIFICATIONS = UUID.fromString("00002902-0000-1000-8000-00805f9b34f
 private const val FIRMWARE = "firmware.bin"
 private const val SECRET = "secret"
 private const val MTU = 517
+private const val DEFAULT_MTU = 23
 private const val ATT_HEADER = 3
 private const val HELLO_SIZE = 16
 
@@ -190,8 +191,9 @@ class Dongle(
     ) = coroutineScope {
         // the first message proves that the dongle holds the same secret
         val build = gatt.receive()?.let(link::decrypt)?.takeIf { it[0].toInt() == STATUS } ?: return@coroutineScope
+        // a dongle that pairs keeps the secret when it gets this, so the phone keeps it after
+        if (!gatt.send { frame(link.encrypt(INFO, context.app.authenticator.info)) }) return@coroutineScope
         linked()
-        gatt.send { frame(link.encrypt(INFO, context.app.authenticator.info)) }
         status.value = Status.Connected
         launch(Dispatchers.IO) { update(gatt, link, build.copyOfRange(1, build.size)) }
         var request: Job? = null
@@ -246,14 +248,12 @@ private class Gatt(
     @Suppress("DEPRECATION")
     private val gatt = device.connectGatt(context, false, this, BluetoothDevice.TRANSPORT_LE)
     private var rx: BluetoothGattCharacteristic? = null
-    private var payload = 0
+    private var payload = DEFAULT_MTU - ATT_HEADER
 
     suspend fun open(): Boolean {
         if (!done()) return false
-        gatt.requestMtu(MTU)
-        if (!done()) return false
-        gatt.discoverServices()
-        if (!done()) return false
+        if (!gatt.requestMtu(MTU) || !done()) return false
+        if (!gatt.discoverServices() || !done()) return false
         val service = gatt.getService(SERVICE) ?: return false
         val tx = service.getCharacteristic(TX) ?: return false
         rx = service.getCharacteristic(RX) ?: return false
