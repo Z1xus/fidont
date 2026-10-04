@@ -38,7 +38,7 @@ also the phone only talks to the dongle while the app is open, so open it when s
 
 ## relay
 
-the qr flow needs a relay between the phone and the computer, the app uses google's (`cable.ua5v.com`) for now
+the qr flow needs a relay between the phone and the computer, the app uses google's (`cable.ua5v.com`) for now. a relay only forwards encrypted messages, so it can't read them or sign in as you
 
 to run your own:
 
@@ -47,8 +47,8 @@ docker build -t fidont-relay relay
 docker run -p 8080:8080 fidont-relay
 ```
 
-then put it behind tls and set `RELAY` in [`Hybrid.kt`](core/src/commonMain/kotlin/us/z1x/fidont/hybrid/Hybrid.kt) to your id.  
-browsers get the domain from the id, so you can't pick it yourself (260 is `cable.ahbeeuk74xtkd.com`)
+browsers get the domain from a relay id (256 to 65535), so you can't pick it yourself. `docker run fidont-relay -domain <id>` prints the one for your id, register it and point it at the relay with tls in front.  
+then set `RELAY` in [`Hybrid.kt`](core/src/commonMain/kotlin/us/z1x/fidont/hybrid/Hybrid.kt) to your id
 
 ## build
 
