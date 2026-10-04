@@ -13,20 +13,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -153,22 +152,15 @@ fun Page(
     content: LazyListScope.() -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
-        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
         containerColor = scheme.surfaceContainer,
         topBar = {
-            LargeTopAppBar(
+            TopAppBar(
                 title = { Text(stringResource(title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(painterResource(R.drawable.ic_back), stringResource(R.string.back)) }
                 },
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = scheme.surfaceContainer,
-                        scrolledContainerColor = scheme.surfaceContainer,
-                    ),
-                scrollBehavior = scroll,
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = scheme.surfaceContainer),
             )
         },
     ) { padding ->
