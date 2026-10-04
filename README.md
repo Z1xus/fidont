@@ -11,6 +11,7 @@ It works as:
 - a key for browsers on other devices, you scan their passkey QR code with the app
 - an NFC key, just tap the phone on a reader
 - a USB key for everything else, through the [dongle](#dongle)
+- a Bluetooth key for browsers on a computer that you paired the phone with (experimental)
 
 Your keys are made inside the phone's secure hardware (StrongBox, or the TEE on phones without it) and nothing can copy them out of there. Using one always takes your fingerprint or PIN.
 
