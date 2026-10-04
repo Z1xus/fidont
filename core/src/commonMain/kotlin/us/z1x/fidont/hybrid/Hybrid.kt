@@ -9,8 +9,8 @@ import us.z1x.fidont.hmac
 import us.z1x.fidont.random
 import us.z1x.fidont.sha256
 
-// 0 is Google's cable.ua5v.com, 256 and up hash to a domain that we must own
-private const val RELAY = 0
+// browsers hash this id to cable.ahhkeysummo2d.com, 0 is Google's cable.ua5v.com
+private const val RELAY = 64322
 
 private const val EID_KEY = 1
 private const val TUNNEL_ID = 2

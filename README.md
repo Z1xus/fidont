@@ -38,7 +38,7 @@ also the phone only talks to the dongle while the app is open, so open it when s
 
 ## relay
 
-the qr flow needs a relay between the phone and the computer, the app uses google's (`cable.ua5v.com`) for now. a relay only forwards encrypted messages, so it can't read them or sign in as you
+the qr flow needs a relay between the phone and the computer, the app uses mine at `cable.ahhkeysummo2d.com`. a relay only forwards encrypted messages, so it can't read them or sign in as you
 
 to run your own:
 
