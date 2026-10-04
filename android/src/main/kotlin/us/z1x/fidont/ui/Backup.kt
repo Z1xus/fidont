@@ -57,7 +57,7 @@ fun rememberBackup(): Backup {
     val scope = rememberCoroutineScope()
     var enabled by remember { mutableStateOf(app.keys.backup) }
     var dialog by remember { mutableStateOf<Dialog?>(null) }
-    var password by remember { mutableStateOf("") }
+    var exported by remember { mutableStateOf<Pair<ByteArray, Int>?>(null) }
 
     fun restore(
         file: ByteArray,
@@ -77,22 +77,22 @@ fun rememberBackup(): Backup {
 
     val save =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+            val (file, count) = exported ?: return@rememberLauncherForActivityResult
+            exported = null
             if (uri != null) {
                 scope.launch {
-                    val entries = app.keys.export(app.credentials.all().executeAsList()) ?: return@launch
-                    withContext(Dispatchers.IO) {
-                        context.contentResolver.openOutputStream(uri)!!.use { it.write(encodeBackup(entries, password)) }
-                    }
-                    val text = resources.getQuantityString(R.plurals.exported, entries.size, entries.size)
-                    Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+                    withContext(Dispatchers.IO) { context.contentResolver.openOutputStream(uri)!!.use { it.write(file) } }
+                    Toast.makeText(context, resources.getQuantityString(R.plurals.exported, count, count), Toast.LENGTH_SHORT).show()
                 }
             }
         }
     val open =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri != null) {
-                val file = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
-                if (backupEncrypted(file) == true) dialog = Dialog.Import(file) else restore(file, "")
+                scope.launch {
+                    val file = withContext(Dispatchers.IO) { context.contentResolver.openInputStream(uri)!!.use { it.readBytes() } }
+                    if (backupEncrypted(file) == true) dialog = Dialog.Import(file) else restore(file, "")
+                }
             }
         }
 
@@ -118,9 +118,12 @@ fun rememberBackup(): Backup {
         }
 
         Dialog.Export -> {
-            PasswordDialog(R.string.export_title, R.string.export_password_body, R.string.export, { dialog = null }) {
-                password = it
-                save.launch(FILE_NAME)
+            PasswordDialog(R.string.export_title, R.string.export_password_body, R.string.export, { dialog = null }) { password ->
+                scope.launch {
+                    val entries = app.keys.export(app.credentials.all().executeAsList()) ?: return@launch
+                    exported = withContext(Dispatchers.Default) { encodeBackup(entries, password) } to entries.size
+                    save.launch(FILE_NAME)
+                }
             }
         }
 
