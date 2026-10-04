@@ -7,6 +7,8 @@
     <string name="prompt_create">Create passkey for %1$s</string>
     <string name="prompt_sign_in">Sign in to %1$s</string>
     <string name="prompt_choose">Choose an account</string>
+    <string name="prompt_backup">Turn on backup</string>
+    <string name="prompt_export">Export passkeys</string>
 
     <string name="onboarding_welcome">Sign in with this phone</string>
     <string name="onboarding_welcome_body">fidont keeps your passkeys here and signs you in to apps, websites, and other computers.</string>
@@ -84,6 +86,29 @@
     <string name="provider">Passkey provider</string>
     <string name="on">On</string>
     <string name="off">Off</string>
+    <string name="backup">Backup</string>
+    <string name="backup_allow">Allow backup</string>
+    <string name="backup_allow_body">You can export only the passkeys that you create while this is on.</string>
+    <string name="backup_off_title">Turn off backup?</string>
+    <string name="backup_off_body">Your passkeys keep working, but you can\'t export them anymore.</string>
+    <string name="backup_off">Turn off</string>
+    <string name="export">Export</string>
+    <string name="export_body">Save your passkeys to a file</string>
+    <string name="export_title">Export passkeys</string>
+    <string name="export_password_body">Leave it empty to save the file without encryption.</string>
+    <plurals name="exported">
+        <item quantity="one">%d passkey saved</item>
+        <item quantity="other">%d passkeys saved</item>
+    </plurals>
+    <string name="import_action">Import</string>
+    <string name="import_body">Add passkeys from a file</string>
+    <string name="import_title">Enter the backup password</string>
+    <string name="import_failed">Couldn\'t open the backup</string>
+    <plurals name="imported">
+        <item quantity="one">%d passkey added</item>
+        <item quantity="other">%d passkeys added</item>
+    </plurals>
+    <string name="password">Password</string>
     <string name="appearance">Appearance</string>
     <string name="theme">Theme</string>
     <string name="theme_system">System</string>
@@ -104,7 +129,7 @@
     <string name="privacy_collection">Data collection</string>
     <string name="privacy_collection_body">fidont doesn\'t collect personal data. It has no accounts, ads, or analytics. Android checks your fingerprint or PIN, and fidont never sees them.</string>
     <string name="privacy_storage">Data storage</string>
-    <string name="privacy_storage_body">Passkeys and their account names are stored only on this phone. The keys stay in its secure hardware and can\'t be exported. Nothing is uploaded, synced, or backed up.</string>
+    <string name="privacy_storage_body">Passkeys and their account names are stored only on this phone. The keys stay in its secure hardware. If you turn on backup, the phone also keeps an encrypted copy of each new key, and only you can export it to a file. Nothing is uploaded or synced.</string>
     <string name="privacy_network">Internet use</string>
     <string name="privacy_network_body">fidont uses the internet only when you scan a QR code. Your phone and the other device then connect through a relay at cable.ahhkeysummo2d.com, operated by z1xus and served through Cloudflare. Messages are end-to-end encrypted, so the relay and Cloudflare can\'t read them. Both can see your IP address and the time of the connection. The relay keeps no logs.</string>
     <string name="privacy_dongle">Dongle</string>

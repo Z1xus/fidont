@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
@@ -25,6 +26,9 @@ import us.z1x.fidont.app
 const val AUTHOR = "https://z1x.us"
 private const val REPOSITORY = "https://github.com/Z1xus/fidont"
 private const val LICENSE = "GPL-3.0"
+
+// the opacity that Material gives to disabled content
+private const val DISABLED = 0.38f
 
 @Composable
 fun Settings(
@@ -50,6 +54,7 @@ fun Settings(
         version,
         strongBox,
         rememberSetup(),
+        rememberBackup(),
         preferences::setTheme,
         preferences::setBlack,
         preferences::setDynamic,
@@ -67,6 +72,7 @@ fun SettingsScreen(
     version: String,
     strongBox: Boolean,
     setup: Setup,
+    backup: Backup,
     onTheme: (ThemeMode) -> Unit,
     onBlack: (Boolean) -> Unit,
     onDynamic: (Boolean) -> Unit,
@@ -89,6 +95,36 @@ fun SettingsScreen(
         item {
             val state = if (setup.provider) R.string.on else R.string.off
             Step(R.drawable.ic_shield, R.string.provider, state, setup.provider, 2, 3, setup.onProvider)
+        }
+        item { SectionHeader(R.string.backup) }
+        item {
+            Entry(
+                0,
+                3,
+                stringResource(R.string.backup_allow),
+                supporting = stringResource(R.string.backup_allow_body),
+                trailing = { Switch(backup.enabled, onCheckedChange = null) },
+                onClick = backup.onToggle,
+            )
+        }
+        item {
+            Entry(
+                1,
+                3,
+                stringResource(R.string.export),
+                modifier = Modifier.alpha(if (backup.enabled) 1f else DISABLED),
+                supporting = stringResource(R.string.export_body),
+                onClick = backup.onExport.takeIf { backup.enabled },
+            )
+        }
+        item {
+            Entry(
+                2,
+                3,
+                stringResource(R.string.import_action),
+                supporting = stringResource(R.string.import_body),
+                onClick = backup.onImport,
+            )
         }
         item { SectionHeader(R.string.appearance) }
         item {

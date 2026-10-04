@@ -29,6 +29,7 @@ import us.z1x.fidont.sha256
 private const val CREATE = "webauthn.create"
 private const val GET = "webauthn.get"
 private val TRANSPORTS = JSONArray(listOf("internal", "hybrid", "usb", "nfc"))
+private val PRF_CONTEXT = "WebAuthn PRF".toByteArray() + 0
 
 // X.509 header of a P-256 public key, the uncompressed point follows
 private val SPKI_HEADER = "3059301306072a8648ce3d020106082a8648ce3d030107034200".hexToByteArray()
@@ -96,6 +97,7 @@ class ProviderActivity : ComponentActivity() {
                 .put("publicKeyAlgorithm", ES256)
                 .put("transports", TRANSPORTS)
         val results = JSONObject().put("credProps", JSONObject().put("rk", true))
+        prf(options, registration.credential.id)?.let { results.put("prf", it.put("enabled", true)) }
         return CreatePublicKeyCredentialResponse(credential(registration.credential.id, response, results))
     }
 
@@ -112,7 +114,23 @@ class ProviderActivity : ComponentActivity() {
                 .put("authenticatorData", encode(assertion.authData))
                 .put("signature", encode(assertion.signature))
                 .put("userHandle", encode(assertion.credential.userId))
-        return GetCredentialResponse(PublicKeyCredential(credential(id, response, JSONObject())))
+        val results = JSONObject()
+        prf(options, id)?.let { results.put("prf", it) }
+        return GetCredentialResponse(PublicKeyCredential(credential(id, response, results)))
+    }
+
+    private fun prf(
+        options: JSONObject,
+        id: ByteArray,
+    ): JSONObject? {
+        val prf = options.optJSONObject("extensions")?.optJSONObject("prf") ?: return null
+        val inputs = prf.optJSONObject("evalByCredential")?.optJSONObject(encode(id)) ?: prf.optJSONObject("eval")
+        val results = JSONObject()
+        for (name in inputs?.keys() ?: return JSONObject()) {
+            val output = app.authenticator.secret(id, sha256(PRF_CONTEXT + decode(inputs.getString(name)))) ?: return JSONObject()
+            results.put(name, encode(output))
+        }
+        return JSONObject().put("results", results)
     }
 
     private fun credential(

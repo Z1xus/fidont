@@ -11,7 +11,8 @@ import us.z1x.fidont.ui.PromptActivity
 
 class App : Application() {
     val credentials by lazy { Database(AndroidSqliteDriver(Database.Schema, this, "fidont.db")).credentialQueries }
-    val authenticator by lazy { Authenticator(AndroidKeyStore(this), credentials) { PromptActivity.choose(this, it) } }
+    val keys by lazy { AndroidKeyStore(this) }
+    val authenticator by lazy { Authenticator(keys, credentials) { PromptActivity.choose(this, it) } }
     val dongle by lazy { Dongle(this) }
     val preferences by lazy { Preferences(this) }
 }

@@ -11,5 +11,10 @@ interface KeyStore {
         registering: Boolean,
     ): ByteArray?
 
+    fun hmac(
+        id: ByteArray,
+        salt: ByteArray,
+    ): ByteArray?
+
     fun delete(id: ByteArray)
 }

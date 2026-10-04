@@ -1,6 +1,10 @@
 package us.z1x.fidont.ctap2
 
+import us.z1x.fidont.aesCbc
 import us.z1x.fidont.cbor.Cbor
+import us.z1x.fidont.ecdh
+import us.z1x.fidont.ecdhGenerate
+import us.z1x.fidont.hmac
 import us.z1x.fidont.random
 import us.z1x.fidont.sha256
 import us.z1x.fidont.store.Credential
@@ -9,21 +13,33 @@ import us.z1x.fidont.store.CredentialQueries
 private const val MAKE_CREDENTIAL = 0x01
 private const val GET_ASSERTION = 0x02
 private const val GET_INFO = 0x04
+private const val CLIENT_PIN = 0x06
 
 const val OK = 0x00
 private const val INVALID_COMMAND = 0x01
+private const val INVALID_PARAMETER = 0x02
+private const val INVALID_LENGTH = 0x03
 private const val INVALID_CBOR = 0x12
 private const val MISSING_PARAMETER = 0x14
 private const val CREDENTIAL_EXCLUDED = 0x19
 private const val UNSUPPORTED_ALGORITHM = 0x26
 private const val OPERATION_DENIED = 0x27
 private const val NO_CREDENTIALS = 0x2e
+private const val PIN_AUTH_INVALID = 0x33
+private const val INVALID_SUBCOMMAND = 0x3e
 
 private const val USER_PRESENT = 0x01
 private const val USER_VERIFIED = 0x04
 private const val ATTESTED = 0x40
+private const val EXTENSIONS = 0x80
 
 const val ES256 = -7L
+private const val ECDH_ES_HKDF_256 = -25L
+private const val HMAC_SECRET = "hmac-secret"
+private const val PIN_PROTOCOL = 1
+private const val KEY_AGREEMENT = 2L
+private const val SALT_SIZE = 32
+private const val SALT_AUTH_SIZE = 16
 private const val CREDENTIAL_ID_SIZE = 32
 private const val MAX_MESSAGE_SIZE = 4096
 private const val MAX_ALLOW_LIST = 16
@@ -54,13 +70,17 @@ class Authenticator(
     private val credentials: CredentialQueries,
     private val choose: suspend (List<Credential>) -> Credential?,
 ) {
+    private val agreement = ecdhGenerate()
+
     val info: ByteArray =
         Cbor.encode(
             mapOf(
                 1 to listOf("FIDO_2_0"),
+                2 to listOf(HMAC_SECRET),
                 3 to AAGUID,
                 4 to mapOf("rk" to true, "uv" to true),
                 5 to MAX_MESSAGE_SIZE,
+                6 to listOf(PIN_PROTOCOL),
                 7 to MAX_ALLOW_LIST,
                 8 to CREDENTIAL_ID_SIZE,
                 9 to listOf("usb", "nfc", "hybrid", "internal"),
@@ -75,6 +95,7 @@ class Authenticator(
                     MAKE_CREDENTIAL -> Cbor.encode(makeCredential(parameters ?: missing()))
                     GET_ASSERTION -> Cbor.encode(getAssertion(parameters ?: missing()))
                     GET_INFO -> info
+                    CLIENT_PIN -> Cbor.encode(clientPin(parameters ?: missing()))
                     else -> throw CtapException(INVALID_COMMAND)
                 }
             byteArrayOf(OK.toByte()) + response
@@ -92,18 +113,20 @@ class Authenticator(
         displayName: String,
         discoverable: Boolean,
         exclude: List<ByteArray>,
+        secret: Boolean = false,
     ): Registration {
         if (known(rpId, exclude).isNotEmpty()) throw CtapException(CREDENTIAL_EXCLUDED)
         val credential = Credential(random(CREDENTIAL_ID_SIZE), rpId, userId, userName, displayName, discoverable)
         val publicKey = keys.generate(credential.id) ?: throw CtapException(OPERATION_DENIED)
         val authData =
             sha256(rpId.encodeToByteArray()) +
-                byteArrayOf((USER_PRESENT or USER_VERIFIED or ATTESTED).toByte()) +
+                byteArrayOf((USER_PRESENT or USER_VERIFIED or ATTESTED or if (secret) EXTENSIONS else 0).toByte()) +
                 ByteArray(4) +
                 AAGUID +
                 byteArrayOf(0, CREDENTIAL_ID_SIZE.toByte()) +
                 credential.id +
-                cose(publicKey)
+                Cbor.encode(cose(publicKey, ES256)) +
+                if (secret) Cbor.encode(mapOf(HMAC_SECRET to true)) else ByteArray(0)
         val signature = keys.sign(credential, authData + clientDataHash, registering = true)
         if (signature == null) {
             keys.delete(credential.id)
@@ -124,6 +147,7 @@ class Authenticator(
         rpId: String,
         clientDataHash: ByteArray,
         allow: List<ByteArray>,
+        extend: (Credential) -> ByteArray? = { null },
     ): Assertion {
         val candidates = if (allow.isEmpty()) credentials.discoverable(rpId).executeAsList() else known(rpId, allow)
         val credential =
@@ -132,12 +156,19 @@ class Authenticator(
                 1 -> candidates.single()
                 else -> choose(candidates) ?: throw CtapException(OPERATION_DENIED)
             }
-        val authData = sha256(rpId.encodeToByteArray()) + byteArrayOf((USER_PRESENT or USER_VERIFIED).toByte()) + ByteArray(4)
+        val extensions = extend(credential)
+        val flags = USER_PRESENT or USER_VERIFIED or if (extensions != null) EXTENSIONS else 0
+        val authData = sha256(rpId.encodeToByteArray()) + byteArrayOf(flags.toByte()) + ByteArray(4) + (extensions ?: ByteArray(0))
         val signature =
             keys.sign(credential, authData + clientDataHash, registering = false)
                 ?: throw CtapException(OPERATION_DENIED)
         return Assertion(credential, authData, signature)
     }
+
+    fun secret(
+        id: ByteArray,
+        salt: ByteArray,
+    ): ByteArray? = keys.hmac(id, salt)
 
     fun remove(credential: Credential) {
         keys.delete(credential.id)
@@ -160,6 +191,7 @@ class Authenticator(
                 displayName = user["displayName"] as? String ?: "",
                 discoverable = (parameters[7L] as? Map<*, *>)?.get("rk") == true,
                 exclude = descriptors(parameters[5L]),
+                secret = (parameters[6L] as? Map<*, *>)?.get(HMAC_SECRET) == true,
             )
         return mapOf(
             1 to "packed",
@@ -180,13 +212,39 @@ class Authenticator(
                 3 to PROBE_SIGNATURE,
             )
         }
-        val assertion = assert(rpId, clientDataHash, allow)
+        val secret = (parameters[4L] as? Map<*, *>)?.get(HMAC_SECRET) as? Map<*, *>
+        val assertion = assert(rpId, clientDataHash, allow) { credential -> secret?.let { secrets(credential, it) } }
         return mapOf(
             1 to mapOf("id" to assertion.credential.id, "type" to "public-key"),
             2 to assertion.authData,
             3 to assertion.signature,
             4 to mapOf("id" to assertion.credential.userId),
         )
+    }
+
+    private fun clientPin(parameters: Map<*, *>): Map<Int, Any> {
+        if (parameters[2L] != KEY_AGREEMENT) throw CtapException(INVALID_SUBCOMMAND)
+        return mapOf(1 to cose(agreement.public, ECDH_ES_HKDF_256))
+    }
+
+    private fun secrets(
+        credential: Credential,
+        input: Map<*, *>,
+    ): ByteArray? {
+        val peer = input[1L] as? Map<*, *> ?: missing()
+        val x = peer[-2L] as? ByteArray ?: missing()
+        val y = peer[-3L] as? ByteArray ?: missing()
+        val salts = input[2L] as? ByteArray ?: missing()
+        val auth = input[3L] as? ByteArray ?: missing()
+        val shared = sha256(ecdh(agreement.private, byteArrayOf(4) + x + y) ?: throw CtapException(INVALID_PARAMETER))
+        if (!hmac(shared, salts).copyOf(SALT_AUTH_SIZE).contentEquals(auth)) throw CtapException(PIN_AUTH_INVALID)
+        if (salts.size != SALT_SIZE && salts.size != 2 * SALT_SIZE) throw CtapException(INVALID_LENGTH)
+        val outputs =
+            aesCbc(false, shared, salts)
+                .asList()
+                .chunked(SALT_SIZE)
+                .map { keys.hmac(credential.id, it.toByteArray()) ?: return null }
+        return Cbor.encode(mapOf(HMAC_SECRET to aesCbc(true, shared, outputs.reduce(ByteArray::plus))))
     }
 
     private fun known(
@@ -197,15 +255,16 @@ class Authenticator(
     private fun descriptors(list: Any?): List<ByteArray> =
         (list as? List<*>).orEmpty().mapNotNull { (it as? Map<*, *>)?.get("id") as? ByteArray }
 
-    private fun cose(publicKey: ByteArray): ByteArray =
-        Cbor.encode(
-            mapOf(
-                1 to 2,
-                3 to ES256,
-                -1 to 1,
-                -2 to publicKey.copyOfRange(1, 33),
-                -3 to publicKey.copyOfRange(33, 65),
-            ),
+    private fun cose(
+        publicKey: ByteArray,
+        algorithm: Long,
+    ): Map<Int, Any> =
+        mapOf(
+            1 to 2,
+            3 to algorithm,
+            -1 to 1,
+            -2 to publicKey.copyOfRange(1, 33),
+            -3 to publicKey.copyOfRange(33, 65),
         )
 
     private fun missing(): Nothing = throw CtapException(MISSING_PARAMETER)

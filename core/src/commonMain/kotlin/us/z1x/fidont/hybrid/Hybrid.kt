@@ -1,6 +1,6 @@
 package us.z1x.fidont.hybrid
 
-import us.z1x.fidont.aesEncryptBlock
+import us.z1x.fidont.aesCbc
 import us.z1x.fidont.cbor.Cbor
 import us.z1x.fidont.ctap2.Authenticator
 import us.z1x.fidont.ctap2.OK
@@ -91,6 +91,6 @@ private fun advert(
     eid: ByteArray,
     key: ByteArray,
 ): ByteArray {
-    val encrypted = aesEncryptBlock(key.copyOf(32), eid)
+    val encrypted = aesCbc(true, key.copyOf(32), eid)
     return encrypted + hmac(key.copyOfRange(32, 64), encrypted).copyOf(4)
 }

@@ -9,9 +9,17 @@ expect fun hmac(
     data: ByteArray,
 ): ByteArray
 
-expect fun aesEncryptBlock(
+// zero iv, no padding
+expect fun aesCbc(
+    encrypt: Boolean,
     key: ByteArray,
-    block: ByteArray,
+    data: ByteArray,
+): ByteArray
+
+expect fun pbkdf2(
+    password: String,
+    salt: ByteArray,
+    iterations: Int,
 ): ByteArray
 
 expect fun seal(

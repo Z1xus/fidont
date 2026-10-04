@@ -18,7 +18,10 @@ import java.security.spec.ECPublicKeySpec
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
 import javax.crypto.Mac
+import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
 private val p256: ECParameterSpec =
@@ -40,14 +43,25 @@ actual fun hmac(
         doFinal(data)
     }
 
-actual fun aesEncryptBlock(
+actual fun aesCbc(
+    encrypt: Boolean,
     key: ByteArray,
-    block: ByteArray,
+    data: ByteArray,
 ): ByteArray =
-    Cipher.getInstance("AES/ECB/NoPadding").run {
-        init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"))
-        doFinal(block)
+    Cipher.getInstance("AES/CBC/NoPadding").run {
+        init(if (encrypt) Cipher.ENCRYPT_MODE else Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(ByteArray(16)))
+        doFinal(data)
     }
+
+actual fun pbkdf2(
+    password: String,
+    salt: ByteArray,
+    iterations: Int,
+): ByteArray =
+    SecretKeyFactory
+        .getInstance("PBKDF2WithHmacSHA256")
+        .generateSecret(PBEKeySpec(password.toCharArray(), salt, iterations, 256))
+        .encoded
 
 actual fun seal(
     key: ByteArray,

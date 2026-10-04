@@ -28,14 +28,15 @@ import kotlinx.coroutines.sync.withLock
 import us.z1x.fidont.R
 import us.z1x.fidont.store.Credential
 import java.security.Signature
+import javax.crypto.Cipher
 
 private sealed class Request {
     val result = CompletableDeferred<Any?>()
 
     class Authenticate(
-        val credential: Credential,
-        val registering: Boolean,
-        val signature: Signature,
+        val title: String,
+        val subtitle: String?,
+        val crypto: BiometricPrompt.CryptoObject,
     ) : Request()
 
     class Choose(
@@ -65,11 +66,10 @@ class PromptActivity : ComponentActivity() {
     }
 
     private fun authenticate(request: Request.Authenticate) {
-        val title = if (request.registering) R.string.prompt_create else R.string.prompt_sign_in
         val callback =
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    request.result.complete(result.cryptoObject.signature)
+                    request.result.complete(result.cryptoObject)
                 }
 
                 override fun onAuthenticationError(
@@ -81,11 +81,11 @@ class PromptActivity : ComponentActivity() {
             }
         BiometricPrompt
             .Builder(this)
-            .setTitle(getString(title, request.credential.rpId))
-            .setSubtitle(request.credential.userName)
+            .setTitle(request.title)
+            .apply { request.subtitle?.let(::setSubtitle) }
             .setAllowedAuthenticators(BIOMETRIC_STRONG or DEVICE_CREDENTIAL)
             .build()
-            .authenticate(BiometricPrompt.CryptoObject(request.signature), cancellation, mainExecutor, callback)
+            .authenticate(request.crypto, cancellation, mainExecutor, callback)
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -124,7 +124,21 @@ class PromptActivity : ComponentActivity() {
             credential: Credential,
             registering: Boolean,
             signature: Signature,
-        ): Signature? = show(context, Request.Authenticate(credential, registering, signature)) as Signature?
+        ): Signature? {
+            val title = context.getString(if (registering) R.string.prompt_create else R.string.prompt_sign_in, credential.rpId)
+            return unlock(context, Request.Authenticate(title, credential.userName, BiometricPrompt.CryptoObject(signature)))?.signature
+        }
+
+        suspend fun unlock(
+            context: Context,
+            title: Int,
+            cipher: Cipher,
+        ): Cipher? = unlock(context, Request.Authenticate(context.getString(title), null, BiometricPrompt.CryptoObject(cipher)))?.cipher
+
+        private suspend fun unlock(
+            context: Context,
+            request: Request.Authenticate,
+        ) = show(context, request) as BiometricPrompt.CryptoObject?
 
         suspend fun choose(
             context: Context,
