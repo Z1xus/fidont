@@ -18,9 +18,6 @@ but there is no sync, so if you lose the phone or remove the screen lock the key
 > [!NOTE]
 > fido2/webauthn compatible, but not fido certified. sites that only accept certified keys will reject it
 
-> [!WARNING]
-> this is early and hasn't been tested on real hardware yet (the dongle firmware has only run in qemu)
-
 ## install
 
 needs android 14 or newer.  
@@ -57,12 +54,13 @@ those sync your passkeys everywhere, fidont keeps them on one phone and works li
 android 14 lets you turn on more than one passkey provider, so they just show up next to each other when a site asks.  
 what i'd actually do is keep the daily passkeys in the password manager and register fidont as the 2fa key for the password manager itself, and for the accounts you really care about
 
-it also supports `hmac-secret` and prf, which is what bitwarden's passkey login and luks disk encryption through `systemd-cryptenroll` need, but i haven't tested those yet
+it also supports `hmac-secret` and prf, which is what bitwarden's passkey login and luks disk encryption through `systemd-cryptenroll` need
 
 ## relay
 
 the qr flow needs a relay between the phone and the computer, the app uses mine at `cable.ahhkeysummo2d.com`.  
-a relay only forwards encrypted messages, so it can't read them or sign in as you
+a relay only forwards encrypted messages, so it can't read them or sign in as you.  
+mine keeps no logs and stores nothing, a tunnel just sits in memory for 2 minutes at most
 
 to run your own:
 
