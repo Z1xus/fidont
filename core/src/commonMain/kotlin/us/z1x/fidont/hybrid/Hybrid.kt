@@ -3,6 +3,8 @@ package us.z1x.fidont.hybrid
 import us.z1x.fidont.aesCbc
 import us.z1x.fidont.cbor.Cbor
 import us.z1x.fidont.ctap2.Authenticator
+import us.z1x.fidont.ctap2.GET_ASSERTION
+import us.z1x.fidont.ctap2.MAKE_CREDENTIAL
 import us.z1x.fidont.ctap2.OK
 import us.z1x.fidont.hkdf
 import us.z1x.fidont.hmac
@@ -51,7 +53,8 @@ class Hybrid(
                 CTAP -> {
                     val reply = authenticator.handle(message.copyOfRange(1, message.size))
                     tunnel.send(crypter.encrypt(byteArrayOf(CTAP.toByte()) + reply))
-                    done = reply[0].toInt() == OK
+                    val command = message.getOrNull(1)?.toInt()
+                    if (command == MAKE_CREDENTIAL || command == GET_ASSERTION) done = reply[0].toInt() == OK
                 }
 
                 UPDATE -> {}
