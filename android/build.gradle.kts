@@ -15,7 +15,7 @@ android {
         minSdk = 34
         targetSdk = 37
         versionCode = 5
-        versionName = "0.1.4"
+        versionName = "0.1.5"
         buildConfigField("String", "COMMIT", "\"${commit.get().trim()}\"")
     }
 
