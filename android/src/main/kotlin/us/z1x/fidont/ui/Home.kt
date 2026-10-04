@@ -47,6 +47,7 @@ class HomeState(
     val provider: Boolean,
     val credentials: List<Credential>,
     val dongle: DongleState,
+    val bluetooth: BluetoothState,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -63,6 +64,7 @@ fun Home(
     var forgetting by remember { mutableStateOf(false) }
     var dongleOpen by remember { mutableStateOf(false) }
     val (dongle, onDongle) = rememberDongle()
+    val (bluetooth, onBluetooth) = rememberBluetooth()
     val board = (dongle as? DongleState.Unpaired)?.board == true
     val credentials by produceState(emptyList<Credential>()) {
         val query = app.credentials.all()
@@ -76,13 +78,14 @@ fun Home(
         if (board) dongleOpen = true
     }
     HomeScreen(
-        state = HomeState(setup.secure, setup.provider, credentials, dongle),
+        state = HomeState(setup.secure, setup.provider, credentials, dongle, bluetooth),
         onScan = onScan,
         onSettings = onSettings,
         onLock = setup.onLock,
         onProvider = setup.onProvider,
         onPasskey = { opened = it },
         onDongle = { dongleOpen = true },
+        onBluetooth = onBluetooth,
     )
 
     if (dongleOpen) {
@@ -136,6 +139,7 @@ fun HomeScreen(
     onProvider: () -> Unit,
     onPasskey: (Credential) -> Unit,
     onDongle: () -> Unit,
+    onBluetooth: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val list = rememberLazyListState()
@@ -199,6 +203,10 @@ fun HomeScreen(
             }
             item(key = "dongle header") { SectionHeader(R.string.dongle, Modifier.animateItem()) }
             item(key = "dongle") { DongleRow(state.dongle, onDongle, Modifier.animateItem()) }
+            if (state.bluetooth != BluetoothState.Unavailable) {
+                item(key = "bluetooth header") { SectionHeader(R.string.bluetooth, Modifier.animateItem()) }
+                item(key = "bluetooth") { BluetoothRow(state.bluetooth, onBluetooth, Modifier.animateItem()) }
+            }
         }
     }
 }

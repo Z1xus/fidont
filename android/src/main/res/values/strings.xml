@@ -76,6 +76,11 @@
     <string name="dongle_forget_title">Forget dongle?</string>
     <string name="dongle_forget_body">Set it up again to use it.</string>
 
+    <string name="bluetooth">Bluetooth key</string>
+    <string name="bluetooth_connected">Connected to %1$s</string>
+    <string name="bluetooth_waiting_body">Tap, then pair this phone in your computer\'s Bluetooth settings.</string>
+    <string name="bluetooth_allow_body">fidont needs it to reach your computer.</string>
+
     <string name="settings">Settings</string>
     <string name="security">Security</string>
     <string name="storage">Key storage</string>
