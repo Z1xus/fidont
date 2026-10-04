@@ -12,8 +12,8 @@ use your android phone as a fido2/webauthn key
 | nfc readers | tap the phone |
 | anything that only takes a usb key | the [dongle](#dongle) |
 
-keys are made in strongbox (or the tee if the phone has none) and every signature needs your fingerprint or pin.  
-but they never leave the phone, so there's no sync or backup, and removing the screen lock deletes them. so keep a second key on anything important
+keys live in strongbox (the tee if your phone doesn't have strongbox) and you can't get them out, the phone asks for your fingerprint or pin each time it signs something.  
+but there is no sync and no backup either, so if you lose the phone or remove the screen lock the keys are GONE and you should really register a second key wherever you use this
 
 > [!NOTE]
 > fido2/webauthn compatible, but not fido certified. sites that only accept certified keys will reject it
@@ -23,14 +23,14 @@ but they never leave the phone, so there's no sync or backup, and removing the s
 
 ## install
 
-needs android 14 or newer. grab the apk from [releases](https://github.com/Z1xus/fidont/releases) and install it. then turn fidont on as a passkey provider (the app has a button for it)
+needs android 14 or newer. grab the apk from [releases](https://github.com/Z1xus/fidont/releases) and install it. then the first launch walks you through turning it on as a passkey provider
 
 ## dongle
 
 an esp32-s3 board that shows up as a usb security key and passes every request to the phone over bluetooth. it holds no keys, so if you lose it you just flash another one
 
 plug the board into the phone and tap `Set up`, the app flashes and pairs it in one go.  
-if the board isn't found, hold BOOT while plugging it in
+and if the board isn't found, hold BOOT while plugging it in
 
 if flashing from the phone doesn't work, use the [web flasher](https://z1xus.github.io/fidont/) and then `Pair over Bluetooth` in the app
 
@@ -60,3 +60,16 @@ docker run --rm -v "$PWD:/project" -w /project/firmware espressif/idf:v5.5.5 \
 ./gradlew :android:assembleDebug
 go build -C relay
 ```
+
+## privacy
+
+the app has no accounts, ads or analytics, and passkeys never leave the phone. but the qr flow goes through my relay behind cloudflare, so both of us get to see your ip and when you connected. everything else is end-to-end encrypted and the relay doesn't log anything
+
+## credits
+
+- app: [jetpack compose, camerax and credentials](https://developer.android.com/jetpack), [kotlin](https://kotlinlang.org), [okhttp](https://square.github.io/okhttp), [sqldelight](https://sqldelight.github.io/sqldelight), [zxing](https://github.com/zxing/zxing), [material icons](https://fonts.google.com/icons)
+- dongle firmware: [esp-idf](https://github.com/espressif/esp-idf), [tinyusb](https://github.com/hathach/tinyusb), [nimble](https://github.com/apache/mynewt-nimble), [mbed tls](https://github.com/Mbed-TLS/mbedtls)
+- relay: [coder/websocket](https://github.com/coder/websocket)
+- the qr flow is reimplemented from [chromium's hybrid transport](https://source.chromium.org/chromium/chromium/src/+/main:device/fido/cable/) and tested against [fenleon/passkey](https://github.com/fenleon/passkey)
+
+made by [z1xus](https://z1x.us), licensed under [GPL-3.0](LICENSE)
