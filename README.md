@@ -12,8 +12,8 @@ it works as:
 - an nfc key, just tap the phone on a reader
 - a usb key for everything else, through the [dongle](#dongle)
 
-keys live in strongbox (the tee if your phone doesn't have strongbox) and you can't get them out, the phone asks for your fingerprint or pin each time it signs something.  
-but there is no sync, so if you lose the phone or remove the screen lock the keys are GONE, unless you turned on [backup](#backup) before you made them. either way you should really register a second key wherever you use this
+keys live in strongbox (or the tee), can't be extracted and only work with your fingerprint or pin.  
+there is no sync, so if you lose the phone or remove the screen lock they are GONE, unless you turned on [backup](#backup) first
 
 > [!NOTE]
 > fido2/webauthn compatible, but not fido certified. sites that only accept certified keys will reject it
@@ -21,8 +21,7 @@ but there is no sync, so if you lose the phone or remove the screen lock the key
 ## install
 
 needs android 14 or newer.  
-grab the apk from [releases](https://github.com/Z1xus/fidont/releases) and install it.  
-then the first launch walks you through turning it on as a passkey provider
+grab the apk from [releases](https://github.com/Z1xus/fidont/releases) and install it
 
 ## dongle
 
