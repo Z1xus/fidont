@@ -11,7 +11,7 @@
         android:translateX="18"
         android:translateY="18">
         <path
-            android:fillColor="#FFFFFF"
+            android:fillColor="#7FE3C4"
             android:fillType="evenOdd"
             android:pathData="M156 138H224A34 34 0 0 1 258 172V236H392V334H358V276H336V314H304V276H258V340A34 34 0 0 1 224 374H156A34 34 0 0 1 122 340V172A34 34 0 0 1 156 138ZM162 166A12 12 0 0 0 150 178V334A12 12 0 0 0 162 346H218A12 12 0 0 0 230 334V178A12 12 0 0 0 218 166ZM180 192a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z" />
     </group>
