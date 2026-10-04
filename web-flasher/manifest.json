@@ -1,0 +1,10 @@
+{
+  "name": "fidont",
+  "version": "latest",
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [{ "path": "firmware.bin", "offset": 0 }]
+    }
+  ]
+}

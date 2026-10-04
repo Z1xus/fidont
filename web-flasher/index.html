@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>fidont</title>
+    <script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+    <style>
+      body {
+        max-width: 32rem;
+        margin: 20vh auto;
+        padding: 0 1.5rem;
+        font: 1rem/1.5 system-ui, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>fidont</h1>
+    <p>Plug an ESP32-S3 board into this computer. If it doesn't show up, hold BOOT while you plug it in.</p>
+    <esp-web-install-button manifest="manifest.json"></esp-web-install-button>
+    <p>Then open fidont on your phone and tap Pair over Bluetooth.</p>
+  </body>
+</html>
