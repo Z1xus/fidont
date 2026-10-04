@@ -64,8 +64,7 @@ class Hybrid(
     }
 }
 
-fun relayDomain(id: Int): String {
-    if (id < 256) return listOf("cable.ua5v.com", "cable.auth.com")[id]
+private fun relayDomain(id: Int): String {
     val digest = sha256("caBLEv2 tunnel server domain".encodeToByteArray() + byteArrayOf(id.toByte(), (id shr 8).toByte(), 0))
     var value = (7 downTo 0).fold(0UL) { number, index -> number shl 8 or digest[index].toUByte().toULong() }
     val tld = listOf("com", "org", "net", "info")[(value and 3u).toInt()]

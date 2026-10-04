@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -48,10 +48,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             val dark = rememberDark()
             val onboarded by app.preferences.onboarded.collectAsState()
-            DisposableEffect(dark) {
+            SideEffect {
                 val bars = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
                 enableEdgeToEdge(bars, bars)
-                onDispose {}
             }
             AppTheme {
                 AnimatedContent(

@@ -15,7 +15,7 @@
     <string name="onboarding_safe">Keys stay on this phone</string>
     <string name="onboarding_safe_body">They live in the phone\'s secure hardware, and the phone asks for your fingerprint or PIN each time you sign in.</string>
     <string name="onboarding_setup">Two things to turn on</string>
-    <string name="onboarding_ready">You\'re all set</string>
+    <string name="onboarding_ready">Both are on</string>
     <string name="next">Next</string>
     <string name="skip">Skip</string>
     <string name="start">Get started</string>

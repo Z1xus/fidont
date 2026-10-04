@@ -1,7 +1,6 @@
 #include <string.h>
 
 #include "class/hid/hid_device.h"
-#include "esp_random.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "tinyusb.h"

@@ -44,20 +44,20 @@ fun Settings(
     val dynamic by preferences.dynamic.collectAsState()
     val strongBox = context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
     SettingsScreen(
-        theme,
-        black,
-        dynamic,
-        BuildConfig.VERSION_NAME,
-        BuildConfig.COMMIT,
-        strongBox,
-        rememberSetup(),
-        rememberBackup(),
-        preferences::setTheme,
-        preferences::setBlack,
-        preferences::setDynamic,
-        onBack,
-        onPrivacy,
-        onLicenses,
+        theme = theme,
+        black = black,
+        dynamic = dynamic,
+        version = BuildConfig.VERSION_NAME,
+        commit = BuildConfig.COMMIT,
+        strongBox = strongBox,
+        setup = rememberSetup(),
+        backup = rememberBackup(),
+        onTheme = preferences::setTheme,
+        onBlack = preferences::setBlack,
+        onDynamic = preferences::setDynamic,
+        onBack = onBack,
+        onPrivacy = onPrivacy,
+        onLicenses = onLicenses,
     )
 }
 

@@ -124,7 +124,7 @@ fun rememberDongle(): Pair<DongleState, (DongleAction) -> Unit> {
                     scope.launch {
                         failure = null
                         progress = 0f
-                        if (!allowed(context, usb, device) || !dongle.setUp(device) { progress = it }) {
+                        if (!usbPermission(context, usb, device) ||!dongle.setUp(device) { progress = it }) {
                             failure = DongleState.Failure.SetUp
                         }
                         progress = null
@@ -147,7 +147,7 @@ fun rememberDongle(): Pair<DongleState, (DongleAction) -> Unit> {
     }
 }
 
-private suspend fun allowed(
+private suspend fun usbPermission(
     context: Context,
     usb: UsbManager,
     device: UsbDevice,
