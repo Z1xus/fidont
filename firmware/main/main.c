@@ -47,6 +47,9 @@ static esp_ota_handle_t update;
 static void post(enum source source, uint8_t type, const uint8_t *data, size_t size)
 {
     struct event event = {source, type, size, malloc(size)};
+    if (size && !event.data) {
+        return;
+    }
     memcpy(event.data, data, size);
     xQueueSend(events, &event, portMAX_DELAY);
 }
@@ -111,6 +114,9 @@ static void handle(uint8_t type, const uint8_t *data, size_t size)
         }
         break;
     case LINK_UPDATE_BEGIN:
+        if (update_partition) {
+            esp_ota_abort(update);
+        }
         update_partition = esp_ota_get_next_update_partition(NULL);
         if (esp_ota_begin(update_partition, OTA_WITH_SEQUENTIAL_WRITES, &update) != ESP_OK) {
             update_partition = NULL;
