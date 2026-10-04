@@ -1,5 +1,8 @@
 package us.z1x.fidont.cbor
 
+// ctap2 allows four levels of nesting
+private const val MAX_DEPTH = 4
+
 object Cbor {
     fun encode(value: Any?): ByteArray =
         when (value) {
@@ -80,7 +83,8 @@ object Cbor {
         private val bytes: ByteArray,
         private var position: Int,
     ) {
-        fun read(): Any? {
+        fun read(depth: Int = 0): Any? {
+            require(depth <= MAX_DEPTH)
             val initial = take(1)[0].toInt() and 0xff
             val major = initial shr 5
             val info = initial and 31
@@ -104,8 +108,8 @@ object Cbor {
                 1 -> -1 - value
                 2 -> take(count(value))
                 3 -> take(count(value)).decodeToString()
-                4 -> List(count(value)) { read() }
-                5 -> buildMap { repeat(count(value)) { put(read(), read()) } }
+                4 -> List(count(value)) { read(depth + 1) }
+                5 -> buildMap { repeat(count(value)) { put(read(depth + 1), read(depth + 1)) } }
                 else -> throw IllegalArgumentException()
             }
         }

@@ -10,8 +10,8 @@ import us.z1x.fidont.sha256
 import us.z1x.fidont.store.Credential
 import us.z1x.fidont.store.CredentialQueries
 
-private const val MAKE_CREDENTIAL = 0x01
-private const val GET_ASSERTION = 0x02
+const val MAKE_CREDENTIAL = 0x01
+const val GET_ASSERTION = 0x02
 private const val GET_INFO = 0x04
 private const val CLIENT_PIN = 0x06
 
@@ -237,7 +237,11 @@ class Authenticator(
         val salts = input[2L] as? ByteArray ?: missing()
         val auth = input[3L] as? ByteArray ?: missing()
         val shared = sha256(ecdh(agreement.private, byteArrayOf(4) + x + y) ?: throw CtapException(INVALID_PARAMETER))
-        if (!hmac(shared, salts).copyOf(SALT_AUTH_SIZE).contentEquals(auth)) throw CtapException(PIN_AUTH_INVALID)
+        val tag = hmac(shared, salts)
+        if (auth.size != SALT_AUTH_SIZE) throw CtapException(PIN_AUTH_INVALID)
+        // the comparison must take the same time for every tag
+        val difference = auth.indices.fold(0) { bits, index -> bits or (auth[index].toInt() xor tag[index].toInt()) }
+        if (difference != 0) throw CtapException(PIN_AUTH_INVALID)
         if (salts.size != SALT_SIZE && salts.size != 2 * SALT_SIZE) throw CtapException(INVALID_LENGTH)
         val outputs =
             aesCbc(false, shared, salts)
