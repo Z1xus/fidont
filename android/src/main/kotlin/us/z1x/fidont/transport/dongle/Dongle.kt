@@ -194,7 +194,8 @@ class Dongle(
             }
         }
 
-    // a computer advertises only while a request waits, so Android can tell us when the app is closed
+    // a computer advertises only while a request waits and a dongle then ends its ID with a 1
+    // so Android can tell us when the app is closed
     @SuppressLint("MissingPermission")
     fun watch(enabled: Boolean) {
         val scanner = context.getSystemService(BluetoothManager::class.java).adapter?.bluetoothLeScanner ?: return
@@ -207,8 +208,8 @@ class Dongle(
             )
         scanner.stopScan(intent)
         if (!enabled) context.getSystemService(NotificationManager::class.java).cancel(REQUEST_NOTIFICATION)
-        val computers = links.value.filter { it.computer != null }.map { filter(linkId(it.secret)) }
-        if (enabled && computers.isNotEmpty()) scanner.startScan(computers, ScanSettings.Builder().build(), intent)
+        val waiting = links.value.map { filter(linkId(it.secret) + if (it.computer == null) byteArrayOf(1) else byteArrayOf()) }
+        if (enabled && waiting.isNotEmpty()) scanner.startScan(waiting, ScanSettings.Builder().build(), intent)
     }
 
     fun forget(id: String) = save(links.value.filter { it.id != id })
@@ -260,7 +261,7 @@ class Dongle(
                     ) {
                         val id = result.scanRecord?.getServiceData(ParcelUuid(SERVICE)) ?: return
                         scanner.stopScan(this)
-                        if (continuation.isActive) continuation.resume(result.device to id)
+                        if (continuation.isActive) continuation.resume(result.device to id.copyOf(ID_SIZE))
                     }
 
                     override fun onScanFailed(errorCode: Int) {

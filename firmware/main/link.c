@@ -43,6 +43,7 @@ static uint8_t secret[SECRET_SIZE];
 static uint8_t paired_secret[SECRET_SIZE];
 static bool paired;
 static bool pairing;
+static bool waiting;
 
 static uint8_t address_type;
 static uint16_t connection = BLE_HS_CONN_HANDLE_NONE;
@@ -256,22 +257,37 @@ static const struct ble_gatt_svc_def services[] = {
 };
 
 // the service data names the dongle to its phone, zeros mean that it has no phone yet
-static void advertise(void)
+// the last byte tells a phone with a closed app that a request waits
+static void describe(void)
 {
-    uint8_t data[UUID_SIZE + ID_SIZE] = {UUID(0)};
+    uint8_t data[UUID_SIZE + ID_SIZE + 1] = {UUID(0)};
     if (paired) {
         uint8_t hash[KEY_SIZE];
         size_t written;
         psa_hash_compute(PSA_ALG_SHA_256, secret, SECRET_SIZE, hash, sizeof(hash), &written);
         memcpy(data + UUID_SIZE, hash, ID_SIZE);
     }
+    data[UUID_SIZE + ID_SIZE] = waiting;
     struct ble_hs_adv_fields fields = {
         .flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP,
         .svc_data_uuid128 = data,
         .svc_data_uuid128_len = sizeof(data),
     };
-    struct ble_gap_adv_params params = {.conn_mode = BLE_GAP_CONN_MODE_UND, .disc_mode = BLE_GAP_DISC_MODE_GEN};
     ble_gap_adv_set_fields(&fields);
+}
+
+void link_wait(bool wait)
+{
+    if (wait != waiting) {
+        waiting = wait;
+        describe();
+    }
+}
+
+static void advertise(void)
+{
+    struct ble_gap_adv_params params = {.conn_mode = BLE_GAP_CONN_MODE_UND, .disc_mode = BLE_GAP_DISC_MODE_GEN};
+    describe();
     ble_gap_adv_start(address_type, NULL, BLE_HS_FOREVER, &params, on_gap, NULL);
 }
 

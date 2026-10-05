@@ -202,7 +202,7 @@
     <string name="privacy_nearby">Nearby devices</string>
     <string name="privacy_nearby_body">Shows the other device that your phone is near, and reaches the dongle and your computers.</string>
     <string name="privacy_notifications">Notifications</string>
-    <string name="privacy_notifications_body">Tell you when a paired computer asks for your key.</string>
+    <string name="privacy_notifications_body">Tell you when a computer asks for your key.</string>
     <string name="privacy_third_parties">Third parties</string>
     <string name="privacy_cloudflare">Cloudflare privacy policy</string>
     <string name="privacy_google">Google privacy policy</string>

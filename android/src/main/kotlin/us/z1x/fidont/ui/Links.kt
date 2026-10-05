@@ -119,9 +119,9 @@ fun rememberLinks(): Links {
             }
         }
     }
-    // the notice is how a computer reaches the phone while the app is closed
-    LaunchedEffect(computers.isEmpty()) {
-        if (computers.isNotEmpty()) notify.launch(Manifest.permission.POST_NOTIFICATIONS)
+    // the notice is how a request reaches the phone while the app is closed
+    LaunchedEffect(links.isEmpty()) {
+        if (links.isNotEmpty()) notify.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     val state =

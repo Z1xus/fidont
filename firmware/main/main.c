@@ -181,5 +181,6 @@ void app_main(void)
         }
         usb_tick();
         light_tick(request.active);
+        link_wait(request.active && !request.forwarded);
     }
 }

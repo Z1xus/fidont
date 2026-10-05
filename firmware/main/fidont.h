@@ -46,6 +46,7 @@ void light_tick(bool request);
 
 void link_start(void);
 bool link_send(uint8_t type, const uint8_t *data, size_t size);
+void link_wait(bool wait);
 
 // called from the USB and Bluetooth tasks, main.c queues them for the main task
 void on_packet(const uint8_t *packet);
