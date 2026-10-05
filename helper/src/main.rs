@@ -493,7 +493,7 @@ async fn run(pairing: bool) -> Result<(), Box<dyn Error>> {
         if pairing && helper.paired()? {
             println!("Paired.");
             helper.disconnect().await;
-            systemctl(&["try-restart", UNIT]);
+            systemctl(&["restart", UNIT]);
             return Ok(());
         }
     }
