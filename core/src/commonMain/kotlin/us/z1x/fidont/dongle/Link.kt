@@ -35,6 +35,13 @@ fun pairedSecret(
     dongleKey: ByteArray,
 ): ByteArray = hkdf(shared, phoneKey + dongleKey, "fidont pair".encodeToByteArray(), SECRET_SIZE)
 
+// both sides show this after a computer pairs, so a person can compare them
+fun pairingCode(secret: ByteArray): String {
+    val bytes = hkdf(secret, ByteArray(0), "fidont code".encodeToByteArray(), 4)
+    val digits = bytes.fold(0L) { number, byte -> number shl 8 or byte.toUByte().toLong() } % 1_000_000
+    return "${digits / 1000}".padStart(3, '0') + " " + "${digits % 1000}".padStart(3, '0')
+}
+
 class Link(
     secret: ByteArray,
     phoneHello: ByteArray,

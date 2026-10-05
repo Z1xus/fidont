@@ -39,6 +39,12 @@ private val LIBRARIES =
             listOf(
                 Library("coder/websocket", "ISC", "https://github.com/coder/websocket"),
             ),
+        R.string.licenses_helper to
+            listOf(
+                Library("BlueR", "BSD-2-Clause", "https://github.com/bluez/bluer"),
+                Library("Tokio", "MIT", "https://github.com/tokio-rs/tokio"),
+                Library("RustCrypto", "Apache-2.0 or MIT", "https://github.com/RustCrypto"),
+            ),
     )
 
 private const val CLOUDFLARE_PRIVACY = "https://www.cloudflare.com/privacypolicy/"
@@ -56,6 +62,7 @@ private val PERMISSIONS =
     listOf(
         R.string.privacy_camera to R.string.privacy_camera_body,
         R.string.privacy_nearby to R.string.privacy_nearby_body,
+        R.string.privacy_notifications to R.string.privacy_notifications_body,
     )
 
 @Composable

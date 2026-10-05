@@ -41,6 +41,11 @@ jobs:
           cache: false
       - name: Relay
         run: CGO_ENABLED=0 go build -C relay -trimpath -ldflags="-s -w" -o ../dist/fidont-relay-linux-x86_64
+      - name: Helper
+        run: |
+          sudo apt-get install -y libdbus-1-dev
+          cargo build --release --locked --manifest-path helper/Cargo.toml
+          cp helper/target/release/fidont-helper dist/fidont-helper-linux-x86_64
       - name: Checksums
         working-directory: dist
         run: |

@@ -76,6 +76,20 @@
     <string name="dongle_forget_title">Forget dongle?</string>
     <string name="dongle_forget_body">Set it up again to use it.</string>
 
+    <string name="helper">Helper</string>
+    <string name="helper_add">Add a computer</string>
+    <string name="helper_add_body">Run fidont-helper pair on a Linux computer, then tap Pair.</string>
+    <string name="helper_pair">Pair</string>
+    <string name="helper_pairing_body">Looking for a computer nearby.</string>
+    <string name="helper_missed">No computer found</string>
+    <string name="helper_confirm">Confirm</string>
+    <string name="helper_confirm_body">Check that the computer shows this code.</string>
+    <string name="helper_waiting_body">Connects when the computer asks for your key.</string>
+    <string name="helper_forget_title">Forget %1$s?</string>
+    <string name="helper_forget_body">Pair it again to use it.</string>
+    <string name="request_channel">Requests</string>
+    <string name="request_title">A computer is asking for your key</string>
+    <string name="request_body">Open fidont to answer.</string>
     <string name="bluetooth">Bluetooth key</string>
     <string name="bluetooth_connected">Connected to %1$s</string>
     <string name="bluetooth_connected_body">Pick the USB security key option in your browser.</string>
@@ -177,7 +191,9 @@
     <string name="privacy_camera">Camera</string>
     <string name="privacy_camera_body">Scans QR codes. Images stay on this phone.</string>
     <string name="privacy_nearby">Nearby devices</string>
-    <string name="privacy_nearby_body">Shows the other device that your phone is near, and reaches the dongle.</string>
+    <string name="privacy_nearby_body">Shows the other device that your phone is near, and reaches the dongle and your computers.</string>
+    <string name="privacy_notifications">Notifications</string>
+    <string name="privacy_notifications_body">Tell you when a paired computer asks for your key.</string>
     <string name="privacy_third_parties">Third parties</string>
     <string name="privacy_cloudflare">Cloudflare privacy policy</string>
     <string name="privacy_google">Google privacy policy</string>
@@ -186,4 +202,5 @@
     <string name="licenses_app">App</string>
     <string name="licenses_firmware">Dongle firmware</string>
     <string name="licenses_relay">Relay</string>
+    <string name="licenses_helper">Helper</string>
 </resources>

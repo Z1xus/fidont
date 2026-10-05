@@ -10,7 +10,7 @@ It works as:
 - a passkey provider for apps and sites on the phone itself
 - a key for browsers on other devices, you scan their passkey QR code with the app
 - an NFC key, just tap the phone on a reader
-- a USB key for everything else, through the [dongle](#dongle)
+- a USB key for everything else, through the [dongle](#dongle) or the [helper](#helper) on Linux
 - a Bluetooth key for browsers on a computer that you paired the phone with
 
 Your keys are made inside the phone's secure hardware (StrongBox, or the TEE on phones without it) and nothing can copy them out of there. Using one always takes your fingerprint or PIN.
@@ -36,6 +36,23 @@ And if the board isn't found, hold BOOT while plugging it in.
 If flashing from the phone doesn't work, use the [web flasher](https://z1xus.github.io/fidont/) and then "Pair over Bluetooth" in the app.
 
 Also the phone only talks to the dongle while the app is open, so open it when something asks for the key.
+
+## Helper
+
+On Linux the computer can do the dongle's job itself and you don't need a board, just `fidont-helper` from the [releases](https://github.com/Z1xus/fidont/releases).
+
+```sh
+install -D fidont-helper-linux-x86_64 ~/.local/bin/fidont-helper
+fidont-helper pair
+fidont-helper install
+```
+
+`pair` waits for the phone, so tap "Add a computer" and then "Pair" in the app, and check that both show the same code.  
+`install` sets it up as a systemd user service, and `fidont-helper unpair` forgets the phone.
+
+The app doesn't have to be open for this one, the phone shows a notification when the computer asks for the key.
+
+Windows support is planned.
 
 ## Backup
 
@@ -84,7 +101,7 @@ Then pick Custom under QR code relay in settings and enter your ID.
 
 ## Build
 
-Needs JDK 17+, the Android SDK, Go and Docker.  
+Needs JDK 17+, the Android SDK, Go, Docker and Rust (the helper also wants the D-Bus headers).  
 The firmware goes first because the app bundles it.
 
 ```sh
@@ -92,6 +109,7 @@ docker run --rm -v "$PWD:/project" -w /project/firmware espressif/idf:v6.1 \
     idf.py build merge-bin -o ../../android/src/main/assets/firmware.bin
 ./gradlew :android:assembleDebug
 go build -C relay
+cargo build --release --manifest-path helper/Cargo.toml
 ```
 
 ## Credits

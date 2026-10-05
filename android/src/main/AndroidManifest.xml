@@ -10,6 +10,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.NFC" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission
@@ -60,6 +61,10 @@
             android:excludeFromRecents="true"
             android:exported="false"
             android:theme="@style/Theme.Fidont.Translucent" />
+
+        <receiver
+            android:name=".transport.dongle.RequestReceiver"
+            android:exported="false" />
 
         <service
             android:name=".transport.provider.ProviderService"

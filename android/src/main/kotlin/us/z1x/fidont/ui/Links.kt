@@ -24,6 +24,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -36,24 +37,36 @@ import kotlin.time.Duration.Companion.seconds
 private const val ESPRESSIF = 0x303a
 private const val SERIAL_JTAG = 0x1001
 private val BLUETOOTH = arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-private val PAIR_TIMEOUT = 30.seconds
 
-// Android throttles an app that starts more than 5 scans in 30 seconds
-private val RETRY = 6.seconds
+// a person compares the codes of a computer within this time
+private val PAIR_TIMEOUT = 60.seconds
+
+class Links(
+    val dongle: DongleState,
+    val onDongle: (DongleAction) -> Unit,
+    val helper: HelperState,
+    val onHelper: (HelperAction) -> Unit,
+)
 
 @Composable
-fun rememberDongle(): Pair<DongleState, (DongleAction) -> Unit> {
+fun rememberLinks(): Links {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val dongle = context.app.dongle
     val usb = remember { context.getSystemService(UsbManager::class.java) }
-    val secret by dongle.secret.collectAsState()
-    val status by dongle.status.collectAsState()
+    val links by dongle.links.collectAsState()
+    val statuses by dongle.status.collectAsState()
+    val paired = links.firstOrNull { it.computer == null }
+    val computers = links.filter { it.computer != null }
     var board by remember { mutableStateOf<UsbDevice?>(null) }
     var progress by remember { mutableStateOf<Float?>(null) }
     var pairing by remember { mutableStateOf<Job?>(null) }
+    var computer by remember { mutableStateOf(false) }
+    var code by remember { mutableStateOf<String?>(null) }
+    val answer = remember { Channel<Boolean>(Channel.CONFLATED) }
     var failure by remember { mutableStateOf<DongleState.Failure?>(null) }
+    var missed by remember { mutableStateOf(false) }
     var allowed by remember {
         mutableStateOf(BLUETOOTH.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED })
     }
@@ -61,38 +74,56 @@ fun rememberDongle(): Pair<DongleState, (DongleAction) -> Unit> {
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
             allowed = granted.values.all { it }
         }
+    val notify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     val pair =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
             allowed = granted.values.all { it }
             if (allowed) {
                 failure = null
+                missed = false
                 pairing =
                     scope.launch {
                         try {
-                            if (withTimeoutOrNull(PAIR_TIMEOUT) { dongle.pair() } != true) failure = DongleState.Failure.Pair
+                            val done =
+                                withTimeoutOrNull(PAIR_TIMEOUT) {
+                                    dongle.pair(computer) {
+                                        code = it
+                                        answer.receive()
+                                    }
+                                }
+                            if (done != true && computer) missed = true
+                            if (done != true && !computer) failure = DongleState.Failure.Pair
                         } finally {
                             pairing = null
+                            code = null
                         }
                     }
             }
         }
 
-    if (secret == null) {
+    if (paired == null) {
         LaunchedEffect(Unit) {
             while (true) {
                 board = usb.deviceList.values.firstOrNull { it.vendorId == ESPRESSIF && it.productId == SERIAL_JTAG }
                 delay(1.seconds)
             }
         }
-    } else if (allowed) {
-        LaunchedEffect(Unit) {
+    }
+    if (allowed && links.isNotEmpty()) {
+        LaunchedEffect(links) {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                while (true) {
+                try {
+                    dongle.watch(false)
                     dongle.serve()
-                    delay(RETRY)
+                } finally {
+                    dongle.watch(true)
                 }
             }
         }
+    }
+    // the notice is how a computer reaches the phone while the app is closed
+    LaunchedEffect(computers.isEmpty()) {
+        if (computers.isNotEmpty()) notify.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     val state =
@@ -101,11 +132,11 @@ fun rememberDongle(): Pair<DongleState, (DongleAction) -> Unit> {
                 DongleState.SettingUp(progress ?: 0f)
             }
 
-            pairing != null -> {
+            pairing != null && !computer -> {
                 DongleState.Pairing
             }
 
-            secret == null -> {
+            paired == null -> {
                 DongleState.Unpaired(board != null, failure)
             }
 
@@ -114,45 +145,84 @@ fun rememberDongle(): Pair<DongleState, (DongleAction) -> Unit> {
             }
 
             else -> {
-                when (val current = status) {
-                    Status.Searching -> DongleState.Searching
+                when (val current = statuses[paired.id]) {
+                    null, Status.Searching -> DongleState.Searching
                     Status.Connected -> DongleState.Connected
                     is Status.Updating -> DongleState.Updating(current.progress)
                 }
             }
         }
-    return state to { action ->
-        when (action) {
-            DongleAction.SetUp -> {
-                board?.let { device ->
-                    scope.launch {
-                        failure = null
-                        progress = 0f
-                        if (!usbPermission(context, usb, device) || !dongle.setUp(device) { progress = it }) {
-                            failure = DongleState.Failure.SetUp
+    val helper =
+        HelperState(
+            computers = computers.map { Helper(it.id, it.computer.orEmpty(), statuses[it.id] == Status.Connected) },
+            allowed = allowed,
+            pairing =
+                when {
+                    !computer || pairing == null -> Pairing.Idle(missed)
+                    else -> code?.let(Pairing::Confirm) ?: Pairing.Searching
+                },
+        )
+    return Links(
+        dongle = state,
+        onDongle = { action ->
+            when (action) {
+                DongleAction.SetUp -> {
+                    board?.let { device ->
+                        scope.launch {
+                            failure = null
+                            progress = 0f
+                            if (!usbPermission(context, usb, device) || !dongle.setUp(device) { progress = it }) {
+                                failure = DongleState.Failure.SetUp
+                            }
+                            progress = null
                         }
-                        progress = null
                     }
                 }
-            }
 
-            DongleAction.Pair -> {
-                pair.launch(BLUETOOTH)
-            }
+                DongleAction.Pair -> {
+                    computer = false
+                    pair.launch(BLUETOOTH)
+                }
 
-            DongleAction.Cancel -> {
-                pairing?.cancel()
-            }
+                DongleAction.Cancel -> {
+                    pairing?.cancel()
+                }
 
-            DongleAction.Allow -> {
-                allow.launch(BLUETOOTH)
-            }
+                DongleAction.Allow -> {
+                    allow.launch(BLUETOOTH)
+                }
 
-            DongleAction.Forget -> {
-                dongle.forget()
+                DongleAction.Forget -> {
+                    paired?.let { dongle.forget(it.id) }
+                }
             }
-        }
-    }
+        },
+        helper = helper,
+        onHelper = { action ->
+            when (action) {
+                HelperAction.Pair -> {
+                    computer = true
+                    pair.launch(BLUETOOTH)
+                }
+
+                HelperAction.Cancel -> {
+                    pairing?.cancel()
+                }
+
+                HelperAction.Confirm -> {
+                    answer.trySend(true)
+                }
+
+                HelperAction.Allow -> {
+                    allow.launch(BLUETOOTH)
+                }
+
+                is HelperAction.Forget -> {
+                    dongle.forget(action.id)
+                }
+            }
+        },
+    )
 }
 
 private suspend fun usbPermission(

@@ -47,6 +47,7 @@ class HomeState(
     val provider: Boolean,
     val credentials: List<Credential>,
     val dongle: DongleState,
+    val helper: HelperState,
     val bluetooth: BluetoothState,
 )
 
@@ -63,7 +64,12 @@ fun Home(
     var deleting by remember { mutableStateOf<Credential?>(null) }
     var forgetting by remember { mutableStateOf(false) }
     var dongleOpen by remember { mutableStateOf(false) }
-    val (dongle, onDongle) = rememberDongle()
+    val links = rememberLinks()
+    val dongle = links.dongle
+    val onDongle = links.onDongle
+    var helperOpen by remember { mutableStateOf(false) }
+    var computer by remember { mutableStateOf<String?>(null) }
+    var removing by remember { mutableStateOf<Helper?>(null) }
     val (bluetooth, onBluetooth) = rememberBluetooth()
     var bluetoothOpen by remember { mutableStateOf(false) }
     val board = (dongle as? DongleState.Unpaired)?.board == true
@@ -78,16 +84,44 @@ fun Home(
     LaunchedEffect(board) {
         if (board) dongleOpen = true
     }
+    // a computer that was paired or forgotten closes its sheet
+    LaunchedEffect(links.helper.computers.size) {
+        helperOpen = false
+    }
     HomeScreen(
-        state = HomeState(setup.secure, setup.provider, credentials, dongle, bluetooth),
+        state = HomeState(setup.secure, setup.provider, credentials, dongle, links.helper, bluetooth),
         onScan = onScan,
         onSettings = onSettings,
         onLock = setup.onLock,
         onProvider = setup.onProvider,
         onPasskey = { opened = it },
         onDongle = { dongleOpen = true },
+        onHelper = {
+            computer = it
+            helperOpen = true
+        },
         onBluetooth = { bluetoothOpen = true },
     )
+
+    if (helperOpen) {
+        ModalBottomSheet(onDismissRequest = { helperOpen = false }) {
+            val shown = links.helper.computers.firstOrNull { it.id == computer }
+            HelperSheet(links.helper, shown) { if (it is HelperAction.Forget) removing = shown else links.onHelper(it) }
+        }
+    }
+
+    removing?.let { helper ->
+        Confirm(
+            title = stringResource(R.string.helper_forget_title, helper.name),
+            body = R.string.helper_forget_body,
+            action = R.string.forget,
+            onDismiss = { removing = null },
+            onConfirm = {
+                links.onHelper(HelperAction.Forget(helper.id))
+                removing = null
+            },
+        )
+    }
 
     if (bluetoothOpen) {
         ModalBottomSheet(onDismissRequest = { bluetoothOpen = false }) { BluetoothSheet(bluetooth, onBluetooth) }
@@ -144,6 +178,7 @@ fun HomeScreen(
     onProvider: () -> Unit,
     onPasskey: (Credential) -> Unit,
     onDongle: () -> Unit,
+    onHelper: (String?) -> Unit,
     onBluetooth: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -208,6 +243,21 @@ fun HomeScreen(
             }
             item(key = "dongle header") { SectionHeader(R.string.dongle, Modifier.animateItem()) }
             item(key = "dongle") { DongleRow(state.dongle, onDongle, Modifier.animateItem()) }
+            item(key = "helper header") { SectionHeader(R.string.helper, Modifier.animateItem()) }
+            val computers = state.helper.computers
+            itemsIndexed(computers, key = { _, computer -> computer.id }) { index, computer ->
+                HelperRow(computer, state.helper.allowed, index, computers.size + 1, { onHelper(computer.id) }, Modifier.animateItem())
+            }
+            item(key = "helper") {
+                Entry(
+                    computers.size,
+                    computers.size + 1,
+                    stringResource(R.string.helper_add),
+                    Modifier.animateItem(),
+                    leading = { IconBadge(R.drawable.ic_computer, scheme.surfaceContainerHighest) },
+                    onClick = { onHelper(null) },
+                )
+            }
             item(key = "bluetooth header") { SectionHeader(R.string.bluetooth, Modifier.animateItem()) }
             item(key = "bluetooth") { BluetoothRow(state.bluetooth, onBluetooth, Modifier.animateItem()) }
         }
