@@ -43,6 +43,8 @@ import kotlin.time.Duration.Companion.seconds
 private val PERMISSIONS =
     arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_ADVERTISE)
 
+private const val VISIBLE_SECONDS = 120
+
 class Computer(
     val name: String,
     val address: String,
@@ -101,16 +103,8 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
             allowed = granted.values.all { it }
         }
-    var visible by remember { mutableIntStateOf(0) }
-    // the result code is the time in seconds that the phone stays visible
-    val show =
-        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode != Activity.RESULT_CANCELED) visible = result.resultCode
-        }
-    LaunchedEffect(visible) {
-        delay(visible.seconds)
-        visible = 0
-    }
+    val visible by key.visible.collectAsState()
+    val show = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
 
     if (allowed) {
         LaunchedEffect(Unit) {
@@ -148,7 +142,7 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
                     computers = key.computers.map { Computer(it.name ?: it.address, it.address) },
                     nearby = nearby.map { Computer(it.name ?: it.address, it.address) },
                     searching = searching,
-                    visible = key.name.takeIf { visible > 0 },
+                    visible = key.name.takeIf { visible },
                     failed = current.failed,
                 )
             }
@@ -162,7 +156,11 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
             // either side can then start the pairing
             BluetoothAction.Pair -> {
                 key.search()
-                show.launch(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE))
+                show.launch(
+                    Intent(
+                        BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE,
+                    ).putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, VISIBLE_SECONDS),
+                )
             }
 
             BluetoothAction.Disconnect -> {

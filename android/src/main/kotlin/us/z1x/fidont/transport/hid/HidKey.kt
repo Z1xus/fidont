@@ -63,6 +63,7 @@ class HidKey(
     val status = MutableStateFlow<HidStatus>(HidStatus.Starting)
     val nearby = MutableStateFlow(emptyList<BluetoothDevice>())
     val searching = MutableStateFlow(false)
+    val visible = MutableStateFlow(false)
 
     val name: String get() = adapter.name
 
@@ -187,6 +188,10 @@ class HidKey(
                                 searching.value = false
                             }
 
+                            BluetoothAdapter.ACTION_SCAN_MODE_CHANGED -> {
+                                visible.value = adapter.scanMode == BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE
+                            }
+
                             BluetoothDevice.ACTION_FOUND, BluetoothDevice.ACTION_NAME_CHANGED, BluetoothDevice.ACTION_CLASS_CHANGED -> {
                                 if (device != null && device.computer && device.name != null && device !in computers) {
                                     nearby.value = (nearby.value + device).distinct()
@@ -215,6 +220,7 @@ class HidKey(
             events.addAction(BluetoothDevice.ACTION_NAME_CHANGED)
             events.addAction(BluetoothDevice.ACTION_CLASS_CHANGED)
             events.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+            events.addAction(BluetoothAdapter.ACTION_SCAN_MODE_CHANGED)
             events.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
             // the Bluetooth stack is another app, and it sends these
             context.registerReceiver(receiver, events, Context.RECEIVER_EXPORTED)
