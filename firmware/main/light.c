@@ -23,7 +23,7 @@ void light_start(void)
         .strip_gpio_num = LED_GPIO,
         .max_leds = 1,
         .led_model = LED_MODEL_WS2812,
-        .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB,
+        .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_RGB,
     };
     led_strip_rmt_config_t rmt = {.resolution_hz = RMT_RESOLUTION};
     led_strip_new_rmt_device(&config, &rmt, &strip);
