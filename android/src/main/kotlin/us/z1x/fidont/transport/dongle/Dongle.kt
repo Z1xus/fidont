@@ -17,6 +17,7 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.ParcelUuid
@@ -35,12 +36,14 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import us.z1x.fidont.Light
 import us.z1x.fidont.app
 import us.z1x.fidont.dongle.CANCEL
 import us.z1x.fidont.dongle.Frames
 import us.z1x.fidont.dongle.HELLO
 import us.z1x.fidont.dongle.ID_SIZE
 import us.z1x.fidont.dongle.INFO
+import us.z1x.fidont.dongle.LIGHT
 import us.z1x.fidont.dongle.LINK_OFFSET
 import us.z1x.fidont.dongle.Link
 import us.z1x.fidont.dongle.PAIR
@@ -290,7 +293,13 @@ class Dongle(
         linked(paired)
         status.update { it + (paired.id to Status.Connected) }
         try {
-            if (paired.computer == null) launch(Dispatchers.IO) { update(gatt, link, paired.id, build) }
+            if (paired.computer == null) {
+                launch(Dispatchers.IO) { update(gatt, link, paired.id, build) }
+                launch {
+                    context.app.preferences.light
+                        .collect { gatt.send { frame(link.encrypt(LIGHT, it.bytes())) } }
+                }
+            }
             var request: Job? = null
             while (true) {
                 val message = gatt.receive()?.let(link::decrypt) ?: break
@@ -434,4 +443,10 @@ private class Gatt(
     ) {
         fragments.trySend(value)
     }
+}
+
+// the eye reads the square of the slider as an even change
+private fun Light.bytes(): ByteArray {
+    val color = Color.HSVToColor(floatArrayOf(hue, 1f, brightness * brightness))
+    return byteArrayOf(mode.ordinal.toByte(), Color.red(color).toByte(), Color.green(color).toByte(), Color.blue(color).toByte())
 }

@@ -162,6 +162,15 @@
     <string name="relay_body">A relay sees your IP address and when you connect. It can\'t read your messages.</string>
     <string name="relay_id">Relay ID</string>
     <string name="relay_id_body">A number from 256 to 65535</string>
+    <string name="fun">Fun stuff</string>
+    <string name="light_off">Off</string>
+    <string name="light_requests">Requests</string>
+    <string name="light_requests_body">On while a computer waits for you.</string>
+    <string name="light_on">Always on</string>
+    <string name="light_rainbow">Rainbow</string>
+    <string name="light_color">Color</string>
+    <string name="light_brightness">Brightness</string>
+    <string name="light_body">The light on your dongle. It changes when the dongle is connected.</string>
     <string name="appearance">Appearance</string>
     <string name="theme">Theme</string>
     <string name="theme_system">System</string>

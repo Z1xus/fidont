@@ -17,6 +17,7 @@ const val RESPONSE = 2
 const val UPDATE_BEGIN = 3
 const val UPDATE_DATA = 4
 const val UPDATE_END = 5
+const val LIGHT = 6
 
 const val SECRET_SIZE = 32
 const val ID_SIZE = 8

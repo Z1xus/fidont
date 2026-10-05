@@ -7,12 +7,16 @@
 #define SECRET_SIZE 32
 #define MAX_MESSAGE 4096
 
+// a mode, then red, green and blue
+#define LIGHT_SIZE 4
+
 // link messages from the phone
 #define LINK_INFO 1
 #define LINK_RESPONSE 2
 #define LINK_UPDATE_BEGIN 3
 #define LINK_UPDATE_DATA 4
 #define LINK_UPDATE_END 5
+#define LINK_LIGHT 6
 
 // link messages to the phone
 #define LINK_STATUS 1
@@ -28,11 +32,17 @@ bool store_secret(uint8_t secret[SECRET_SIZE]);
 void store_set_secret(const uint8_t secret[SECRET_SIZE]);
 size_t store_info(uint8_t *info, size_t size);
 void store_set_info(const uint8_t *info, size_t size);
+void store_light(uint8_t light[LIGHT_SIZE]);
+void store_set_light(const uint8_t light[LIGHT_SIZE]);
 
 void usb_start(void);
 void usb_packet(const uint8_t *packet);
 void usb_tick(void);
 void usb_send(uint32_t channel, uint8_t command, const uint8_t *data, size_t size);
+
+void light_start(void);
+void light_set(const uint8_t light[LIGHT_SIZE]);
+void light_tick(bool request);
 
 void link_start(void);
 bool link_send(uint8_t type, const uint8_t *data, size_t size);

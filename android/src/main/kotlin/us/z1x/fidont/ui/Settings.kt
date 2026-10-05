@@ -1,16 +1,22 @@
 package us.z1x.fidont.ui
 
 import android.content.pm.PackageManager
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,12 +27,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import us.z1x.fidont.BuildConfig
+import us.z1x.fidont.Light
+import us.z1x.fidont.LightMode
 import us.z1x.fidont.R
 import us.z1x.fidont.ThemeMode
 import us.z1x.fidont.app
@@ -42,6 +52,9 @@ private const val LICENSE = "GPL-3.0"
 // the opacity that Material gives to disabled content
 private const val DISABLED = 0.38f
 
+private val HUES = (0..360 step 60).map { Color.hsv(it.toFloat(), 1f, 1f) }
+private val BRIGHTNESS = 0.1f..1f
+
 @Composable
 fun Settings(
     onBack: () -> Unit,
@@ -55,12 +68,16 @@ fun Settings(
     val black by preferences.black.collectAsState()
     val dynamic by preferences.dynamic.collectAsState()
     val relay by preferences.relay.collectAsState()
+    val light by preferences.light.collectAsState()
+    val links by context.app.dongle.links
+        .collectAsState()
     val strongBox = context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
     SettingsScreen(
         theme = theme,
         black = black,
         dynamic = dynamic,
         relay = relay,
+        light = light.takeIf { links.any { it.computer == null } },
         version = BuildConfig.VERSION_NAME,
         commit = BuildConfig.COMMIT,
         strongBox = strongBox,
@@ -70,6 +87,7 @@ fun Settings(
         onBlack = preferences::setBlack,
         onDynamic = preferences::setDynamic,
         onRelay = preferences::setRelay,
+        onLight = preferences::setLight,
         onBack = onBack,
         onPrivacy = onPrivacy,
         onLicenses = onLicenses,
@@ -82,6 +100,7 @@ fun SettingsScreen(
     black: Boolean,
     dynamic: Boolean,
     relay: Int,
+    light: Light?,
     version: String,
     commit: String,
     strongBox: Boolean,
@@ -91,6 +110,7 @@ fun SettingsScreen(
     onBlack: (Boolean) -> Unit,
     onDynamic: (Boolean) -> Unit,
     onRelay: (Int) -> Unit,
+    onLight: (Light) -> Unit,
     onBack: () -> Unit,
     onPrivacy: () -> Unit,
     onLicenses: () -> Unit,
@@ -180,6 +200,10 @@ fun SettingsScreen(
                 trailing = { Switch(dynamic, onCheckedChange = null) },
                 onClick = { onDynamic(!dynamic) },
             )
+        }
+        if (light != null) {
+            item { SectionHeader(R.string.`fun`) }
+            item { Light(light, onLight) }
         }
         item { SectionHeader(R.string.about) }
         item { Entry(0, 6, stringResource(R.string.privacy), onClick = onPrivacy) }
@@ -284,6 +308,55 @@ private fun Relay(
         }
         Text(
             stringResource(R.string.relay_body),
+            Modifier.padding(start = 32.dp, top = 8.dp, end = 32.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun Light(
+    light: Light,
+    onLight: (Light) -> Unit,
+) {
+    val labels = listOf(R.string.light_off, R.string.light_requests, R.string.light_on, R.string.light_rainbow)
+    val count = if (light.mode == LightMode.Off) 4 else 5
+    Column {
+        LightMode.entries.forEachIndexed { index, mode ->
+            Entry(
+                index,
+                count,
+                stringResource(labels[index]),
+                supporting = stringResource(R.string.light_requests_body).takeIf { mode == LightMode.Requests },
+                trailing = { RadioButton(mode == light.mode, onClick = null) },
+                onClick = { onLight(light.copy(mode = mode)) },
+            )
+        }
+        if (light.mode != LightMode.Off) {
+            GroupItem(4, count) {
+                Column(Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp)) {
+                    if (light.mode != LightMode.Rainbow) {
+                        Text(stringResource(R.string.light_color), style = MaterialTheme.typography.bodyLarge)
+                        Slider(
+                            value = light.hue,
+                            onValueChange = { onLight(light.copy(hue = it)) },
+                            valueRange = 0f..360f,
+                            track = { Box(Modifier.fillMaxWidth().height(16.dp).background(Brush.horizontalGradient(HUES), CircleShape)) },
+                        )
+                    }
+                    Text(stringResource(R.string.light_brightness), style = MaterialTheme.typography.bodyLarge)
+                    Slider(
+                        value = light.brightness,
+                        onValueChange = { onLight(light.copy(brightness = it)) },
+                        valueRange = BRIGHTNESS,
+                    )
+                }
+            }
+        }
+        Text(
+            stringResource(R.string.light_body),
             Modifier.padding(start = 32.dp, top = 8.dp, end = 32.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,

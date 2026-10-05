@@ -37,6 +37,9 @@ If flashing from the phone doesn't work, use the [web flasher](https://z1xus.git
 
 Also the phone only talks to the dongle while the app is open, so open it when something asks for the key.
 
+The board's RGB light (GPIO 48) turns on while a request waits for you.  
+You can change that in settings under "Fun stuff", it does colors and a rainbow too.
+
 ## Helper
 
 On Linux the computer can do the dongle's job itself and you don't need a board, just `fidont-helper` from the [releases](https://github.com/Z1xus/fidont/releases).

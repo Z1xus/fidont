@@ -54,3 +54,18 @@ void store_set_info(const uint8_t *info, size_t size)
     nvs_set_blob(storage(), "info", info, size);
     nvs_commit(storage());
 }
+
+void store_light(uint8_t light[LIGHT_SIZE])
+{
+    uint8_t stored[LIGHT_SIZE];
+    size_t size = LIGHT_SIZE;
+    if (nvs_get_blob(storage(), "light", stored, &size) == ESP_OK && size == LIGHT_SIZE) {
+        memcpy(light, stored, LIGHT_SIZE);
+    }
+}
+
+void store_set_light(const uint8_t light[LIGHT_SIZE])
+{
+    nvs_set_blob(storage(), "light", light, LIGHT_SIZE);
+    nvs_commit(storage());
+}

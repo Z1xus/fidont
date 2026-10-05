@@ -10,8 +10,20 @@ private const val BLACK = "black"
 private const val DYNAMIC = "dynamic"
 private const val ONBOARDED = "onboarded"
 private const val RELAY = "relay"
+private const val LIGHT_MODE = "light_mode"
+private const val LIGHT_HUE = "light_hue"
+private const val LIGHT_BRIGHTNESS = "light_brightness"
 
 enum class ThemeMode { System, Light, Dark }
+
+// the firmware knows the modes by their order
+enum class LightMode { Off, Requests, On, Rainbow }
+
+data class Light(
+    val mode: LightMode,
+    val hue: Float,
+    val brightness: Float,
+)
 
 class Preferences(
     context: Context,
@@ -22,6 +34,14 @@ class Preferences(
     val dynamic = MutableStateFlow(store.getBoolean(DYNAMIC, false))
     val onboarded = MutableStateFlow(store.getBoolean(ONBOARDED, false))
     val relay = MutableStateFlow(store.getInt(RELAY, FIDONT_RELAY))
+    val light =
+        MutableStateFlow(
+            Light(
+                LightMode.valueOf(store.getString(LIGHT_MODE, null) ?: LightMode.Requests.name),
+                store.getFloat(LIGHT_HUE, 160f),
+                store.getFloat(LIGHT_BRIGHTNESS, 0.5f),
+            ),
+        )
 
     fun setTheme(mode: ThemeMode) {
         store.edit { putString(THEME, mode.name) }
@@ -41,6 +61,15 @@ class Preferences(
     fun setRelay(id: Int) {
         store.edit { putInt(RELAY, id) }
         relay.value = id
+    }
+
+    fun setLight(value: Light) {
+        store.edit {
+            putString(LIGHT_MODE, value.mode.name)
+            putFloat(LIGHT_HUE, value.hue)
+            putFloat(LIGHT_BRIGHTNESS, value.brightness)
+        }
+        light.value = value
     }
 
     fun finishOnboarding() {

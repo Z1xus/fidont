@@ -135,6 +135,11 @@ static void handle(uint8_t type, const uint8_t *data, size_t size)
         }
         update_partition = NULL;
         break;
+    case LINK_LIGHT:
+        if (size == LIGHT_SIZE) {
+            light_set(data);
+        }
+        break;
     }
 }
 
@@ -142,6 +147,7 @@ void app_main(void)
 {
     events = xQueueCreate(EVENTS, sizeof(struct event));
     info_size = store_info(info, sizeof(info));
+    light_start();
     usb_start();
     link_start();
 
@@ -174,5 +180,6 @@ void app_main(void)
             keepalive = now;
         }
         usb_tick();
+        light_tick(request.active);
     }
 }
