@@ -380,7 +380,7 @@ dependencies = [
 
 [[package]]
 name = "fidont-helper"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "aes-gcm",
  "bluer",
