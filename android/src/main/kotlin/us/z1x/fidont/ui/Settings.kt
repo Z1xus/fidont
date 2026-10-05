@@ -1,5 +1,6 @@
 package us.z1x.fidont.ui
 
+import android.Manifest
 import android.content.pm.PackageManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -20,6 +21,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +36,9 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import us.z1x.fidont.BuildConfig
 import us.z1x.fidont.Light
 import us.z1x.fidont.LightMode
@@ -72,12 +77,18 @@ fun Settings(
     val links by context.app.dongle.links
         .collectAsState()
     val strongBox = context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
+    val dongle = links.any { it.computer == null }
+    // the home screen stops its link when this screen opens, and the light needs one
+    if (dongle && context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+        val lifecycle = LocalLifecycleOwner.current
+        LaunchedEffect(Unit) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { context.app.dongle.serve() } }
+    }
     SettingsScreen(
         theme = theme,
         black = black,
         dynamic = dynamic,
         relay = relay,
-        light = light.takeIf { links.any { it.computer == null } },
+        light = light.takeIf { dongle },
         version = BuildConfig.VERSION_NAME,
         commit = BuildConfig.COMMIT,
         strongBox = strongBox,
