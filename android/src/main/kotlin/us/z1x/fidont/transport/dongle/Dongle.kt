@@ -80,6 +80,9 @@ private const val COMPUTERS = "computers"
 private const val MTU = 517
 private const val DEFAULT_MTU = 23
 private const val ATT_HEADER = 3
+
+// Android refuses a longer write, also when the MTU allows it
+private const val MAX_WRITE = 512
 private const val HELLO_SIZE = 16
 
 // offset of the first app partition in firmware/partitions.csv
@@ -409,7 +412,7 @@ private class Gatt(
         mtu: Int,
         status: Int,
     ) {
-        payload = mtu - ATT_HEADER
+        payload = min(mtu - ATT_HEADER, MAX_WRITE)
         done.trySend(Unit)
     }
 
