@@ -61,13 +61,15 @@ It also supports hmac-secret and PRF, which is what Bitwarden's passkey login an
 
 The app has no accounts or analytics (or ads), and passkeys only leave the phone if you export them yourself.
 
-But the QR flow needs a relay between the phone and the computer, and by default the app uses mine at cable.ahhkeysummo2d.com.  
-It sits behind Cloudflare, so Cloudflare and I both get to see your IP and when you connected.  
-The messages themselves are E2EE, so a relay can't read them or sign in as you. Mine keeps no logs and stores nothing, a tunnel just sits in memory for 2 minutes at most.
+But the QR flow needs a relay between the phone and the computer.  
+Whichever relay you use gets to see your IP and when you connected.  
+The messages themselves are E2EE, so it can't read them or sign in as you.
 
-You can change the relay in settings.  
-Google is cable.ua5v.com, the one Chrome and Android use. Then Google gets to see your IP and when you connected, and I don't know what it logs.  
-Custom takes the ID of a relay you run yourself.
+You pick the relay in settings:
+
+- fidont is the default, it's mine at cable.ahhkeysummo2d.com and runs the [code in this repo](relay). It keeps no logs and stores nothing, a tunnel just sits in memory for 2 minutes at most. It sits behind Cloudflare, so Cloudflare sees the same as me.
+- Google is cable.ua5v.com, the one Chrome and Android use. I don't know what it logs.
+- Custom is a relay you run yourself.
 
 ### Running your own relay
 
