@@ -101,12 +101,10 @@ fun rememberLinks(): Links {
             }
         }
 
-    if (paired == null) {
-        LaunchedEffect(Unit) {
-            while (true) {
-                board = plugged(usb)
-                delay(1.seconds)
-            }
+    LaunchedEffect(Unit) {
+        while (true) {
+            if (progress == null) board = plugged(usb)
+            delay(1.seconds)
         }
     }
     if (allowed && links.isNotEmpty()) {
@@ -136,7 +134,7 @@ fun rememberLinks(): Links {
                 DongleState.Pairing
             }
 
-            paired == null -> {
+            paired == null || board != null -> {
                 DongleState.Unpaired(board != null, failure)
             }
 
@@ -175,6 +173,7 @@ fun rememberLinks(): Links {
                             if (!usbPermission(context, usb, device) || !dongle.setUp(device) { progress = it }) {
                                 failure = DongleState.Failure.SetUp
                             }
+                            board = null
                             progress = null
                         }
                     }
