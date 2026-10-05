@@ -28,6 +28,15 @@ private const val SUPER_WATCHDOG_PROTECT = 0x600080b8L
 private const val SUPER_WATCHDOG_KEY = 0x8f1d312aL
 private const val SUPER_WATCHDOG_CONFIG = 0x600080b4L
 private const val SUPER_WATCHDOG_AUTO_FEED = 1L shl 31
+private const val WATCHDOG_TIMEOUT = 0x6000809cL
+private const val RESET_DELAY = 2000L
+
+// enabled, a system reset at the first stage, one slow clock cycle of reset signal
+private const val RESET_SYSTEM = (1L shl 31) or (5L shl 28) or (1L shl 8) or 2L
+
+// the lines set this to enter the bootloader, and it would do so again after the reset
+private const val OPTION = 0x6000812cL
+private const val FORCE_DOWNLOAD_BOOT = 1L
 
 private const val BLOCK = 0x400
 private const val FLASH_SIZE = 4 * 1024 * 1024
@@ -96,10 +105,13 @@ class Flasher(
         serial.lines(dtr = false, rts = false)
     }
 
+    // a reset over the lines keeps the BOOT button state from power on, the watchdog reads it again
     private fun reset() {
-        serial.lines(dtr = false, rts = true)
-        Thread.sleep(LINE_DELAY)
-        serial.lines(dtr = false, rts = false)
+        command(WRITE_REGISTER, words(OPTION, 0, FORCE_DOWNLOAD_BOOT, 0))
+        command(WRITE_REGISTER, words(WATCHDOG_PROTECT, WATCHDOG_KEY, 0xffffffff, 0))
+        command(WRITE_REGISTER, words(WATCHDOG_TIMEOUT, RESET_DELAY, 0xffffffff, 0))
+        command(WRITE_REGISTER, words(WATCHDOG_CONFIG, RESET_SYSTEM, 0xffffffff, 0))
+        command(WRITE_REGISTER, words(WATCHDOG_PROTECT, 0, 0xffffffff, 0))
     }
 
     private fun sync() {

@@ -104,7 +104,7 @@ fun rememberLinks(): Links {
     if (paired == null) {
         LaunchedEffect(Unit) {
             while (true) {
-                board = usb.deviceList.values.firstOrNull { it.vendorId == ESPRESSIF && it.productId == SERIAL_JTAG }
+                board = plugged(usb)
                 delay(1.seconds)
             }
         }
@@ -167,7 +167,8 @@ fun rememberLinks(): Links {
         onDongle = { action ->
             when (action) {
                 DongleAction.SetUp -> {
-                    board?.let { device ->
+                    // an empty board restarts in a loop, and each start is a new device to Android
+                    plugged(usb)?.let { device ->
                         scope.launch {
                             failure = null
                             progress = 0f
@@ -224,6 +225,8 @@ fun rememberLinks(): Links {
         },
     )
 }
+
+private fun plugged(usb: UsbManager) = usb.deviceList.values.firstOrNull { it.vendorId == ESPRESSIF && it.productId == SERIAL_JTAG }
 
 private suspend fun usbPermission(
     context: Context,
