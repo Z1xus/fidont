@@ -186,7 +186,7 @@ class HidKey(
                                 searching.value = false
                             }
 
-                            BluetoothDevice.ACTION_FOUND -> {
+                            BluetoothDevice.ACTION_FOUND, BluetoothDevice.ACTION_NAME_CHANGED, BluetoothDevice.ACTION_CLASS_CHANGED -> {
                                 if (device != null && device.computer && device.name != null && device !in computers) {
                                     nearby.value = (nearby.value + device).distinct()
                                 }
@@ -211,6 +211,8 @@ class HidKey(
                     }
                 }
             val events = IntentFilter(BluetoothDevice.ACTION_FOUND)
+            events.addAction(BluetoothDevice.ACTION_NAME_CHANGED)
+            events.addAction(BluetoothDevice.ACTION_CLASS_CHANGED)
             events.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
             events.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
             context.registerReceiver(receiver, events, Context.RECEIVER_NOT_EXPORTED)

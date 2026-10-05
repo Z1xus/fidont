@@ -40,7 +40,8 @@ import us.z1x.fidont.app
 import us.z1x.fidont.transport.hid.HidStatus
 import kotlin.time.Duration.Companion.seconds
 
-private val PERMISSIONS = arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
+private val PERMISSIONS =
+    arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_ADVERTISE)
 
 class Computer(
     val name: String,
@@ -77,6 +78,8 @@ sealed interface BluetoothAction {
 
     data object Search : BluetoothAction
 
+    data object Show : BluetoothAction
+
     data object Disconnect : BluetoothAction
 
     class Connect(
@@ -99,6 +102,8 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
             allowed = granted.values.all { it }
         }
+    val show = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
+
     if (allowed) {
         LaunchedEffect(Unit) {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { key.serve() }
@@ -143,6 +148,7 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
         when (action) {
             BluetoothAction.Allow -> allow.launch(PERMISSIONS)
             BluetoothAction.Search -> key.search()
+            BluetoothAction.Show -> show.launch(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE))
             BluetoothAction.Disconnect -> key.disconnect()
             is BluetoothAction.Connect -> key.connect(action.address)
         }
@@ -226,6 +232,10 @@ fun BluetoothSheet(
                         onClick = { onAction(BluetoothAction.Search) },
                         Modifier.fillMaxWidth().padding(start = 24.dp, top = 24.dp, end = 24.dp),
                     ) { Text(stringResource(R.string.bluetooth_search)) }
+                    TextButton(
+                        onClick = { onAction(BluetoothAction.Show) },
+                        Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                    ) { Text(stringResource(R.string.bluetooth_show)) }
                 }
             }
 

@@ -83,10 +83,11 @@
     <string name="bluetooth_connecting_body">Keep the computer nearby.</string>
     <string name="bluetooth_starting">Starting…</string>
     <string name="bluetooth_starting_body">Keep fidont open.</string>
-    <string name="bluetooth_ready_body">Choose a paired computer, or search for a new one.</string>
-    <string name="bluetooth_searching_body">Open the Bluetooth settings on the computer, so the phone can find it.</string>
+    <string name="bluetooth_ready_body">Choose a paired computer. For a new one, search from here or make this phone visible and add it on the computer.</string>
+    <string name="bluetooth_searching_body">Make the computer visible in its Bluetooth settings, so the phone can find it.</string>
     <string name="bluetooth_nearby">Nearby computers</string>
     <string name="bluetooth_search">Search for computers</string>
+    <string name="bluetooth_show">Make this phone visible</string>
     <string name="bluetooth_failed_body">Couldn\'t connect. Remove this phone on the computer, then search for the computer here.</string>
     <string name="bluetooth_paired">Paired computers</string>
     <string name="bluetooth_disconnect">Disconnect</string>
