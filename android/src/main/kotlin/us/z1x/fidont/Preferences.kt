@@ -10,6 +10,8 @@ private const val BLACK = "black"
 private const val DYNAMIC = "dynamic"
 private const val ONBOARDED = "onboarded"
 private const val RELAY = "relay"
+private const val BACKUP_FILE = "backup_file"
+private const val BACKUP_FAILED = "backup_failed"
 private const val LIGHT_MODE = "light_mode"
 private const val LIGHT_HUE = "light_hue"
 private const val LIGHT_BRIGHTNESS = "light_brightness"
@@ -34,6 +36,8 @@ class Preferences(
     val dynamic = MutableStateFlow(store.getBoolean(DYNAMIC, false))
     val onboarded = MutableStateFlow(store.getBoolean(ONBOARDED, false))
     val relay = MutableStateFlow(store.getInt(RELAY, FIDONT_RELAY))
+    val backupFile = MutableStateFlow(store.getString(BACKUP_FILE, null))
+    val backupFailed = MutableStateFlow(store.getBoolean(BACKUP_FAILED, false))
     val light =
         MutableStateFlow(
             Light(
@@ -61,6 +65,17 @@ class Preferences(
     fun setRelay(id: Int) {
         store.edit { putInt(RELAY, id) }
         relay.value = id
+    }
+
+    fun setBackupFile(uri: String?) {
+        store.edit { putString(BACKUP_FILE, uri) }
+        backupFile.value = uri
+        setBackupFailed(false)
+    }
+
+    fun setBackupFailed(value: Boolean) {
+        store.edit { putBoolean(BACKUP_FAILED, value) }
+        backupFailed.value = value
     }
 
     fun setLight(value: Light) {

@@ -6,16 +6,20 @@ import android.content.pm.PackageManager
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.security.keystore.KeyProtection
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import us.z1x.fidont.BackupEntry
 import us.z1x.fidont.R
 import us.z1x.fidont.cbor.Cbor
 import us.z1x.fidont.ctap2.KeyStore
 import us.z1x.fidont.ecdhGenerate
+import us.z1x.fidont.encodeAutomaticBackup
 import us.z1x.fidont.openWith
 import us.z1x.fidont.random
 import us.z1x.fidont.sealTo
 import us.z1x.fidont.store.Credential
 import us.z1x.fidont.ui.PromptActivity
+import us.z1x.fidont.wrapBackupKey
 import java.io.File
 import java.security.InvalidKeyException
 import java.security.KeyFactory
@@ -57,6 +61,9 @@ class AndroidKeyStore(
 
     // the public backup key, then the private one under the keystore key
     private val wrap = File(copies, "key")
+
+    // the private backup key under the password of the automatic backup
+    private val wrapped = File(copies, "password")
 
     val backup get() = wrap.exists()
 
@@ -193,6 +200,21 @@ class AndroidKeyStore(
             val parts = Cbor.decode(openWith(private, public, copy.readBytes()) ?: return@mapNotNull null) as List<*>
             BackupEntry(credential, parts[0] as ByteArray, parts[1] as ByteArray, parts[2] as ByteArray)
         }
+    }
+
+    suspend fun setPassword(password: String): Boolean {
+        val private = unlock(R.string.prompt_automatic) ?: return false
+        wrapped.writeBytes(withContext(Dispatchers.Default) { wrapBackupKey(private, password) })
+        return true
+    }
+
+    fun forgetPassword() = wrapped.delete()
+
+    fun automaticBackup(credentials: List<Credential>): ByteArray? {
+        if (!wrapped.exists()) return null
+        val public = wrap.readBytes().copyOf(POINT_SIZE)
+        val saved = credentials.map { it to File(copies, it.id.toHexString()) }.filter { it.second.exists() }
+        return encodeAutomaticBackup(wrapped.readBytes(), public, saved.map { (credential, copy) -> credential to copy.readBytes() })
     }
 
     private suspend fun unlock(title: Int): ByteArray? {

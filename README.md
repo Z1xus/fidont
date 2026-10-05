@@ -68,6 +68,9 @@ But passkeys from before you turned it on stay locked to the phone, so turn it o
 Export saves those copies to a file, encrypted with a password (PBKDF2 and AES-256-GCM), or plain if you leave the password empty.  
 Import on another phone puts them into its keystore.
 
+There is also "Automatic backup", you pick a file and a password once and the app keeps that file up to date after that.  
+It doesn't need your fingerprint for that, since the copies are already encrypted and only your password opens them.
+
 ## Other password managers
 
 fidont doesn't replace Bitwarden (or Google Password Manager, 1Password etc), it does a different job.  

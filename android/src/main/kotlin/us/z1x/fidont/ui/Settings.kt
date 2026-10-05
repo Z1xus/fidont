@@ -146,7 +146,7 @@ fun SettingsScreen(
         item {
             Entry(
                 0,
-                3,
+                4,
                 stringResource(R.string.backup_allow),
                 supporting = stringResource(R.string.backup_allow_body),
                 trailing = { Switch(backup.enabled, onCheckedChange = null) },
@@ -156,7 +156,18 @@ fun SettingsScreen(
         item {
             Entry(
                 1,
-                3,
+                4,
+                stringResource(R.string.automatic),
+                modifier = Modifier.alpha(if (backup.enabled) 1f else DISABLED),
+                supporting = stringResource(if (backup.failed) R.string.automatic_failed else R.string.automatic_body),
+                trailing = { Switch(backup.automatic, onCheckedChange = null) },
+                onClick = backup.onAutomatic.takeIf { backup.enabled },
+            )
+        }
+        item {
+            Entry(
+                2,
+                4,
                 stringResource(R.string.export),
                 modifier = Modifier.alpha(if (backup.enabled) 1f else DISABLED),
                 supporting = stringResource(R.string.export_body),
@@ -165,8 +176,8 @@ fun SettingsScreen(
         }
         item {
             Entry(
-                2,
                 3,
+                4,
                 stringResource(R.string.import_action),
                 supporting = stringResource(R.string.import_body),
                 onClick = backup.onImport,

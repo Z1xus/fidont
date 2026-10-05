@@ -40,7 +40,7 @@ import us.z1x.fidont.app
 import us.z1x.fidont.encodeBackup
 import us.z1x.fidont.store.Credential
 
-private const val FILE_NAME = "passkeys.fidont"
+const val BACKUP_FILE_NAME = "passkeys.fidont"
 
 @Composable
 fun Export(onBack: () -> Unit) {
@@ -83,7 +83,7 @@ fun Export(onBack: () -> Unit) {
             scope.launch {
                 val entries = app.keys.export(ready) ?: return@launch
                 exported = withContext(Dispatchers.Default) { encodeBackup(entries, if (encrypt) password else "") } to entries.size
-                save.launch(FILE_NAME)
+                save.launch(BACKUP_FILE_NAME)
             }
         },
     )

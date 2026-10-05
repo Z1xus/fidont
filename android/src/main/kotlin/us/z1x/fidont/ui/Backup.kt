@@ -1,5 +1,6 @@
 package us.z1x.fidont.ui
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -9,6 +10,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,13 +33,18 @@ import java.security.GeneralSecurityException
 
 class Backup(
     val enabled: Boolean,
+    val automatic: Boolean,
+    val failed: Boolean,
     val onToggle: () -> Unit,
+    val onAutomatic: () -> Unit,
     val onExport: () -> Unit,
     val onImport: () -> Unit,
 )
 
 private sealed interface Dialog {
     data object Off : Dialog
+
+    data object Automatic : Dialog
 
     class Import(
         val file: ByteArray,
@@ -52,6 +59,20 @@ fun rememberBackup(onExport: () -> Unit): Backup {
     val scope = rememberCoroutineScope()
     var enabled by remember { mutableStateOf(app.keys.backup) }
     var dialog by remember { mutableStateOf<Dialog?>(null) }
+    val file by app.preferences.backupFile.collectAsState()
+    val failed by app.preferences.backupFailed.collectAsState()
+    var password by remember { mutableStateOf("") }
+    val create =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+            if (uri != null) {
+                scope.launch {
+                    if (!app.keys.setPassword(password)) return@launch
+                    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    app.preferences.setBackupFile(uri.toString())
+                    app.saveBackup()
+                }
+            }
+        }
 
     fun restore(
         file: ByteArray,
@@ -91,6 +112,7 @@ fun rememberBackup(onExport: () -> Unit): Backup {
                             dialog = null
                             scope.launch {
                                 app.keys.setBackup(false)
+                                app.preferences.setBackupFile(null)
                                 enabled = false
                             }
                         },
@@ -98,6 +120,13 @@ fun rememberBackup(onExport: () -> Unit): Backup {
                 },
                 dismissButton = { TextButton(onClick = { dialog = null }) { Text(stringResource(R.string.cancel)) } },
             )
+        }
+
+        Dialog.Automatic -> {
+            PasswordDialog(R.string.automatic_title, R.string.automatic_choose, { dialog = null }) {
+                password = it
+                create.launch(BACKUP_FILE_NAME)
+            }
         }
 
         is Dialog.Import -> {
@@ -109,6 +138,8 @@ fun rememberBackup(onExport: () -> Unit): Backup {
 
     return Backup(
         enabled = enabled,
+        automatic = file != null,
+        failed = failed,
         onToggle = {
             if (enabled) {
                 dialog = Dialog.Off
@@ -117,6 +148,14 @@ fun rememberBackup(onExport: () -> Unit): Backup {
                     app.keys.setBackup(true)
                     enabled = app.keys.backup
                 }
+            }
+        },
+        onAutomatic = {
+            if (file == null) {
+                dialog = Dialog.Automatic
+            } else {
+                app.keys.forgetPassword()
+                app.preferences.setBackupFile(null)
             }
         },
         onExport = onExport,
@@ -151,6 +190,7 @@ private fun PasswordDialog(
                     onDismiss()
                     onConfirm(password)
                 },
+                enabled = password.isNotEmpty(),
             ) { Text(stringResource(action)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
