@@ -35,6 +35,9 @@ And if the board isn't found, hold BOOT while plugging it in.
 
 If flashing from the phone doesn't work, use the [web flasher](https://z1xus.github.io/fidont/) and then "Pair over Bluetooth" in the app.
 
+You don't have to open the app, when something asks for the key the fingerprint prompt just shows up on the phone.  
+For that Android asks once if fidont can use the dongle, and if you say no you only get a notification that you have to tap first.
+
 The board's RGB light (GPIO 48) turns on while a request waits for you.  
 You can change that in settings under "Fun stuff", it does colors and a rainbow too.
 
@@ -51,7 +54,7 @@ fidont-helper install
 `pair` waits for the phone, so tap "Add a computer" and then "Pair" in the app, and check that both show the same code.  
 `install` sets it up as a systemd user service, and `fidont-helper unpair` forgets the phone.
 
-The app doesn't have to be open, the phone shows a notification when the computer asks for the key.
+Same thing here, the app doesn't have to be open and the prompt shows up when the computer asks for the key.
 
 Windows support is planned.
 

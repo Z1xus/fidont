@@ -1,6 +1,7 @@
 package us.z1x.fidont.transport.dongle
 
 import android.annotation.SuppressLint
+import android.app.ActivityOptions
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.bluetooth.BluetoothDevice
@@ -15,8 +16,13 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.companion.AssociationInfo
+import android.companion.AssociationRequest
+import android.companion.BluetoothLeDeviceFilter
+import android.companion.CompanionDeviceManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentSender
 import android.graphics.Color
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
@@ -77,6 +83,7 @@ private val NOTIFICATIONS = UUID.fromString("00002902-0000-1000-8000-00805f9b34f
 private const val FIRMWARE = "firmware.bin"
 private const val SECRET = "secret"
 private const val COMPUTERS = "computers"
+private const val ASKED = "asked"
 private const val MTU = 517
 private const val DEFAULT_MTU = 23
 private const val ATT_HEADER = 3
@@ -118,8 +125,11 @@ class Dongle(
     private val context: Context,
 ) {
     private val preferences = context.getSharedPreferences("dongle", Context.MODE_PRIVATE)
+    private val companions = context.getSystemService(CompanionDeviceManager::class.java)
+    private val serving = Mutex()
     val links = MutableStateFlow(load())
     val status = MutableStateFlow(emptyMap<String, Status>())
+    val pending = MutableStateFlow(0)
 
     suspend fun setUp(
         device: UsbDevice,
@@ -147,7 +157,8 @@ class Dongle(
         confirm: suspend (String) -> Boolean,
     ): Boolean {
         var paired = false
-        val (device, _) = find(listOf(ByteArray(ID_SIZE) { if (computer) -1 else 0 })) ?: return false
+        val (device, id) = find(listOf(ByteArray(ID_SIZE) { if (computer) -1 else 0 })) ?: return false
+        associate(id)
         connect(device) { gatt ->
             val key = ecdhGenerate()
             gatt.send { frame(byteArrayOf(PAIR.toByte()) + key.public) }
@@ -166,28 +177,31 @@ class Dongle(
     }
 
     suspend fun serve(): Nothing =
-        coroutineScope {
-            val sessions = this
-            val busy = MutableStateFlow(emptySet<String>())
-            var scanned = TimeSource.Monotonic.markNow() - RETRY
-            busy.collectLatest { current ->
-                val idle = links.value.filter { it.id !in current }
-                while (idle.isNotEmpty()) {
-                    delay(RETRY - scanned.elapsedNow())
-                    scanned = TimeSource.Monotonic.markNow()
-                    val (device, id) = find(idle.map { linkId(it.secret) }) ?: continue
-                    val paired = idle.first { linkId(it.secret).contentEquals(id) }
-                    busy.update { it + paired.id }
-                    sessions.launch {
-                        try {
-                            connect(device) { gatt ->
-                                val hello = random(HELLO_SIZE)
-                                gatt.send { frame(byteArrayOf(HELLO.toByte()) + hello) }
-                                val link = Link(paired.secret, hello, gatt.receive() ?: return@connect)
-                                session(gatt, link, paired, greeting(gatt, link) ?: return@connect) {}
+        serving.withLock {
+            coroutineScope {
+                val sessions = this
+                val busy = MutableStateFlow(emptySet<String>())
+                var scanned = TimeSource.Monotonic.markNow() - RETRY
+                busy.collectLatest { current ->
+                    val idle = links.value.filter { it.id !in current }
+                    while (idle.isNotEmpty()) {
+                        delay(RETRY - scanned.elapsedNow())
+                        scanned = TimeSource.Monotonic.markNow()
+                        val (device, id) = find(idle.map { linkId(it.secret) }) ?: continue
+                        val paired = idle.first { linkId(it.secret).contentEquals(id) }
+                        associate(id)
+                        busy.update { it + paired.id }
+                        sessions.launch {
+                            try {
+                                connect(device) { gatt ->
+                                    val hello = random(HELLO_SIZE)
+                                    gatt.send { frame(byteArrayOf(HELLO.toByte()) + hello) }
+                                    val link = Link(paired.secret, hello, gatt.receive() ?: return@connect)
+                                    session(gatt, link, paired, greeting(gatt, link) ?: return@connect) {}
+                                }
+                            } finally {
+                                busy.update { it - paired.id }
                             }
-                        } finally {
-                            busy.update { it - paired.id }
                         }
                     }
                 }
@@ -212,7 +226,42 @@ class Dongle(
         if (enabled && waiting.isNotEmpty()) scanner.startScan(waiting, ScanSettings.Builder().build(), intent)
     }
 
-    fun forget(id: String) = save(links.value.filter { it.id != id })
+    fun forget(id: String) {
+        save(links.value.filter { it.id != id })
+        if (links.value.isEmpty()) {
+            companions?.myAssociations?.forEach { companions.disassociate(it.id) }
+            preferences.edit { remove(ASKED) }
+        }
+    }
+
+    // Android lets an app with an associated device show the prompt while the app is closed
+    private suspend fun associate(id: ByteArray) {
+        if (companions == null || companions.myAssociations.isNotEmpty() || preferences.getBoolean(ASKED, false)) return
+        preferences.edit { putBoolean(ASKED, true) }
+        val device = BluetoothLeDeviceFilter.Builder().setScanFilter(filter(id)).build()
+        val request =
+            AssociationRequest
+                .Builder()
+                .addDeviceFilter(device)
+                .setSingleDevice(true)
+                .build()
+        val foreground =
+            ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(
+                ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED,
+            )
+        suspendCancellableCoroutine { continuation ->
+            val callback =
+                object : CompanionDeviceManager.Callback() {
+                    override fun onAssociationPending(sender: IntentSender) =
+                        context.startIntentSender(sender, null, 0, 0, 0, foreground.toBundle())
+
+                    override fun onAssociationCreated(association: AssociationInfo) = continuation.resume(Unit)
+
+                    override fun onFailure(error: CharSequence?) = continuation.resume(Unit)
+                }
+            companions.associate(request, context.mainExecutor, callback)
+        }
+    }
 
     // the phone keeps one dongle and any number of computers
     private fun add(paired: Paired) = save(links.value.filter { it.computer != null || paired.computer != null } + paired)
@@ -311,8 +360,13 @@ class Dongle(
                     REQUEST -> {
                         request =
                             launch(Dispatchers.Default) {
-                                val response = context.app.authenticator.handle(message.copyOfRange(1, message.size))
-                                gatt.send { frame(link.encrypt(RESPONSE, response)) }
+                                pending.update { it + 1 }
+                                try {
+                                    val response = context.app.authenticator.handle(message.copyOfRange(1, message.size))
+                                    gatt.send { frame(link.encrypt(RESPONSE, response)) }
+                                } finally {
+                                    pending.update { it - 1 }
+                                }
                             }
                     }
 
