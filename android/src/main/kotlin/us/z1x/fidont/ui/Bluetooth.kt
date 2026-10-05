@@ -61,6 +61,7 @@ sealed interface BluetoothState {
         val computers: List<Computer>,
         val nearby: List<Computer> = emptyList(),
         val searching: Boolean = false,
+        val visible: String? = null,
         val failed: Boolean = false,
     ) : BluetoothState
 
@@ -76,9 +77,7 @@ sealed interface BluetoothState {
 sealed interface BluetoothAction {
     data object Allow : BluetoothAction
 
-    data object Search : BluetoothAction
-
-    data object Show : BluetoothAction
+    data object Pair : BluetoothAction
 
     data object Disconnect : BluetoothAction
 
@@ -102,7 +101,16 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
             allowed = granted.values.all { it }
         }
-    val show = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
+    var visible by remember { mutableIntStateOf(0) }
+    // the result code is the time in seconds that the phone stays visible
+    val show =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode != Activity.RESULT_CANCELED) visible = result.resultCode
+        }
+    LaunchedEffect(visible) {
+        delay(visible.seconds)
+        visible = 0
+    }
 
     if (allowed) {
         LaunchedEffect(Unit) {
@@ -140,17 +148,30 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
                     computers = key.computers.map { Computer(it.name ?: it.address, it.address) },
                     nearby = nearby.map { Computer(it.name ?: it.address, it.address) },
                     searching = searching,
+                    visible = key.name.takeIf { visible > 0 },
                     failed = current.failed,
                 )
             }
         }
     return state to { action ->
         when (action) {
-            BluetoothAction.Allow -> allow.launch(PERMISSIONS)
-            BluetoothAction.Search -> key.search()
-            BluetoothAction.Show -> show.launch(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE))
-            BluetoothAction.Disconnect -> key.disconnect()
-            is BluetoothAction.Connect -> key.connect(action.address)
+            BluetoothAction.Allow -> {
+                allow.launch(PERMISSIONS)
+            }
+
+            // either side can then start the pairing
+            BluetoothAction.Pair -> {
+                key.search()
+                show.launch(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE))
+            }
+
+            BluetoothAction.Disconnect -> {
+                key.disconnect()
+            }
+
+            is BluetoothAction.Connect -> {
+                key.connect(action.address)
+            }
         }
     }
 }
@@ -229,13 +250,9 @@ fun BluetoothSheet(
                     LinearProgressIndicator(Modifier.fillMaxWidth().padding(start = 24.dp, top = 32.dp, end = 24.dp, bottom = 8.dp))
                 } else {
                     TextButton(
-                        onClick = { onAction(BluetoothAction.Search) },
+                        onClick = { onAction(BluetoothAction.Pair) },
                         Modifier.fillMaxWidth().padding(start = 24.dp, top = 24.dp, end = 24.dp),
-                    ) { Text(stringResource(R.string.bluetooth_search)) }
-                    TextButton(
-                        onClick = { onAction(BluetoothAction.Show) },
-                        Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                    ) { Text(stringResource(R.string.bluetooth_show)) }
+                    ) { Text(stringResource(R.string.bluetooth_pair)) }
                 }
             }
 
@@ -303,7 +320,7 @@ private fun body(state: BluetoothState): String =
 
         is BluetoothState.Ready -> {
             when {
-                state.searching -> stringResource(R.string.bluetooth_searching_body)
+                state.visible != null -> stringResource(R.string.bluetooth_pairing_body, state.visible)
                 state.failed -> stringResource(R.string.bluetooth_failed_body)
                 else -> stringResource(R.string.bluetooth_ready_body)
             }

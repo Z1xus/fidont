@@ -64,10 +64,11 @@ class HidKey(
     val nearby = MutableStateFlow(emptyList<BluetoothDevice>())
     val searching = MutableStateFlow(false)
 
+    val name: String get() = adapter.name
+
     val computers: List<BluetoothDevice>
         get() = adapter.bondedDevices.filter { it.computer }
 
-    // the computer must be visible, which it is while its Bluetooth settings are open
     fun search() {
         nearby.value = emptyList()
         searching.value = adapter.startDiscovery()
@@ -215,7 +216,8 @@ class HidKey(
             events.addAction(BluetoothDevice.ACTION_CLASS_CHANGED)
             events.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
             events.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
-            context.registerReceiver(receiver, events, Context.RECEIVER_NOT_EXPORTED)
+            // the Bluetooth stack is another app, and it sends these
+            context.registerReceiver(receiver, events, Context.RECEIVER_EXPORTED)
             try {
                 awaitCancellation()
             } finally {
