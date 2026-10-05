@@ -38,6 +38,7 @@ class HybridTransport(
         try {
             return Hybrid(context.app.authenticator).serve(
                 qr,
+                context.app.preferences.relay.value,
                 connect = { url -> connect(url) { socket = it } },
                 advertise = { advert ->
                     val settings =

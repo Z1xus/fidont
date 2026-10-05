@@ -11,8 +11,10 @@ import us.z1x.fidont.hmac
 import us.z1x.fidont.random
 import us.z1x.fidont.sha256
 
-// browsers hash this id to cable.ahhkeysummo2d.com, 0 is Google's cable.ua5v.com
-private const val RELAY = 64322
+// browsers hash this id to cable.ahhkeysummo2d.com
+const val FIDONT_RELAY = 64322
+const val GOOGLE_RELAY = 0
+val CUSTOM_RELAYS = 256..65535
 
 private const val EID_KEY = 1
 private const val TUNNEL_ID = 2
@@ -35,12 +37,13 @@ class Hybrid(
 ) {
     suspend fun serve(
         qr: Qr,
+        relay: Int,
         connect: suspend (url: String) -> Tunnel?,
         advertise: (ByteArray) -> Unit,
     ): Boolean {
         val tunnelId = derive(qr.secret, ByteArray(0), TUNNEL_ID, 16)
-        val tunnel = connect("wss://${relayDomain(RELAY)}/cable/new/${tunnelId.toHexString()}") ?: return false
-        val eid = byteArrayOf(0) + random(10) + tunnel.routingId + byteArrayOf(RELAY.toByte(), (RELAY shr 8).toByte())
+        val tunnel = connect("wss://${relayDomain(relay)}/cable/new/${tunnelId.toHexString()}") ?: return false
+        val eid = byteArrayOf(0) + random(10) + tunnel.routingId + byteArrayOf(relay.toByte(), (relay shr 8).toByte())
         advertise(advert(eid, derive(qr.secret, ByteArray(0), EID_KEY, 64)))
         val handshake = tunnel.receive() ?: return false
         val (response, crypter) = respond(derive(qr.secret, eid, PSK, 32), qr.peerIdentity, handshake) ?: return false
@@ -67,7 +70,8 @@ class Hybrid(
     }
 }
 
-private fun relayDomain(id: Int): String {
+fun relayDomain(id: Int): String {
+    if (id == GOOGLE_RELAY) return "cable.ua5v.com"
     val digest = sha256("caBLEv2 tunnel server domain".encodeToByteArray() + byteArrayOf(id.toByte(), (id shr 8).toByte(), 0))
     var value = (7 downTo 0).fold(0UL) { number, index -> number shl 8 or digest[index].toUByte().toULong() }
     val tld = listOf("com", "org", "net", "info")[(value and 3u).toInt()]

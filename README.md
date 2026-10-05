@@ -61,9 +61,13 @@ It also supports hmac-secret and PRF, which is what Bitwarden's passkey login an
 
 The app has no accounts or analytics (or ads), and passkeys only leave the phone if you export them yourself.
 
-But the QR flow needs a relay between the phone and the computer, and the app uses mine at cable.ahhkeysummo2d.com.  
+But the QR flow needs a relay between the phone and the computer, and by default the app uses mine at cable.ahhkeysummo2d.com.  
 It sits behind Cloudflare, so Cloudflare and I both get to see your IP and when you connected.  
 The messages themselves are E2EE, so a relay can't read them or sign in as you. Mine keeps no logs and stores nothing, a tunnel just sits in memory for 2 minutes at most.
+
+You can change the relay in settings.  
+Google is cable.ua5v.com, the one Chrome and Android use. Then Google gets to see your IP and when you connected, and I don't know what it logs.  
+Custom takes the ID of a relay you run yourself.
 
 ### Running your own relay
 
@@ -74,7 +78,7 @@ docker run -p 8080:8080 fidont-relay
 
 Browsers get the domain from a relay ID (256 to 65535), so you can't pick it yourself.  
 `docker run fidont-relay -domain <id>` prints the one for your ID, register it and point it at the relay with TLS in front.  
-Then set `RELAY` in [Hybrid.kt](core/src/commonMain/kotlin/us/z1x/fidont/hybrid/Hybrid.kt) to your ID and [build](#build) the app.
+Then pick Custom under QR code relay in settings and enter your ID.
 
 ## Build
 

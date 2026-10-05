@@ -4,7 +4,10 @@ import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -13,16 +16,24 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import us.z1x.fidont.BuildConfig
 import us.z1x.fidont.R
 import us.z1x.fidont.ThemeMode
 import us.z1x.fidont.app
+import us.z1x.fidont.hybrid.CUSTOM_RELAYS
+import us.z1x.fidont.hybrid.FIDONT_RELAY
+import us.z1x.fidont.hybrid.GOOGLE_RELAY
+import us.z1x.fidont.hybrid.relayDomain
 
 const val AUTHOR = "https://z1x.us"
 private const val REPOSITORY = "https://github.com/Z1xus/fidont"
@@ -43,11 +54,13 @@ fun Settings(
     val theme by preferences.theme.collectAsState()
     val black by preferences.black.collectAsState()
     val dynamic by preferences.dynamic.collectAsState()
+    val relay by preferences.relay.collectAsState()
     val strongBox = context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
     SettingsScreen(
         theme = theme,
         black = black,
         dynamic = dynamic,
+        relay = relay,
         version = BuildConfig.VERSION_NAME,
         commit = BuildConfig.COMMIT,
         strongBox = strongBox,
@@ -56,6 +69,7 @@ fun Settings(
         onTheme = preferences::setTheme,
         onBlack = preferences::setBlack,
         onDynamic = preferences::setDynamic,
+        onRelay = preferences::setRelay,
         onBack = onBack,
         onPrivacy = onPrivacy,
         onLicenses = onLicenses,
@@ -67,6 +81,7 @@ fun SettingsScreen(
     theme: ThemeMode,
     black: Boolean,
     dynamic: Boolean,
+    relay: Int,
     version: String,
     commit: String,
     strongBox: Boolean,
@@ -75,6 +90,7 @@ fun SettingsScreen(
     onTheme: (ThemeMode) -> Unit,
     onBlack: (Boolean) -> Unit,
     onDynamic: (Boolean) -> Unit,
+    onRelay: (Int) -> Unit,
     onBack: () -> Unit,
     onPrivacy: () -> Unit,
     onLicenses: () -> Unit,
@@ -125,6 +141,8 @@ fun SettingsScreen(
                 onClick = backup.onImport,
             )
         }
+        item { SectionHeader(R.string.relay) }
+        item { Relay(relay, onRelay) }
         item { SectionHeader(R.string.appearance) }
         item {
             GroupItem(0, 3) {
@@ -202,5 +220,73 @@ fun SettingsScreen(
                 onClick = { links.openUri("$REPOSITORY/commit/$commit") },
             )
         }
+    }
+}
+
+@Composable
+private fun Relay(
+    relay: Int,
+    onRelay: (Int) -> Unit,
+) {
+    var custom by rememberSaveable { mutableStateOf(relay != FIDONT_RELAY && relay != GOOGLE_RELAY) }
+    var id by rememberSaveable { mutableStateOf(if (custom) relay.toString() else "") }
+    val valid = id.toIntOrNull()?.takeIf { it in CUSTOM_RELAYS }
+    val count = if (custom) 4 else 3
+    Column {
+        Entry(
+            0,
+            count,
+            stringResource(R.string.relay_fidont),
+            supporting = stringResource(R.string.relay_fidont_body),
+            trailing = { RadioButton(!custom && relay == FIDONT_RELAY, onClick = null) },
+            onClick = {
+                custom = false
+                onRelay(FIDONT_RELAY)
+            },
+        )
+        Entry(
+            1,
+            count,
+            stringResource(R.string.relay_google),
+            supporting = stringResource(R.string.relay_google_body),
+            trailing = { RadioButton(!custom && relay == GOOGLE_RELAY, onClick = null) },
+            onClick = {
+                custom = false
+                onRelay(GOOGLE_RELAY)
+            },
+        )
+        Entry(
+            2,
+            count,
+            stringResource(R.string.relay_custom),
+            supporting = stringResource(R.string.relay_custom_body),
+            trailing = { RadioButton(custom, onClick = null) },
+            onClick = {
+                custom = true
+                valid?.let(onRelay)
+            },
+        )
+        if (custom) {
+            GroupItem(3, count) {
+                OutlinedTextField(
+                    value = id,
+                    onValueChange = { text ->
+                        id = text.filter(Char::isDigit).take(5)
+                        id.toIntOrNull()?.takeIf { it in CUSTOM_RELAYS }?.let(onRelay)
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 4.dp),
+                    label = { Text(stringResource(R.string.relay_id)) },
+                    supportingText = { Text(valid?.let(::relayDomain) ?: stringResource(R.string.relay_id_body)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                )
+            }
+        }
+        Text(
+            stringResource(R.string.relay_body),
+            Modifier.padding(start = 32.dp, top = 8.dp, end = 32.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }

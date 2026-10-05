@@ -138,6 +138,16 @@
         <item quantity="other">%d passkeys added</item>
     </plurals>
     <string name="password">Password</string>
+    <string name="relay">QR code relay</string>
+    <string name="relay_fidont">fidont</string>
+    <string name="relay_google">Google</string>
+    <string name="relay_custom">Custom</string>
+    <string name="relay_fidont_body">Keeps no logs. Runs behind Cloudflare.</string>
+    <string name="relay_google_body">Covered by Google\'s privacy policy.</string>
+    <string name="relay_custom_body">A relay you run yourself.</string>
+    <string name="relay_body">A relay sees your IP address and when you connect. It can\'t read your messages.</string>
+    <string name="relay_id">Relay ID</string>
+    <string name="relay_id_body">A number from 256 to 65535</string>
     <string name="appearance">Appearance</string>
     <string name="theme">Theme</string>
     <string name="theme_system">System</string>
@@ -160,7 +170,7 @@
     <string name="privacy_storage">Data storage</string>
     <string name="privacy_storage_body">Passkeys and their account names are stored only on this phone. The keys stay in its secure hardware. If you turn on backup, the phone also keeps an encrypted copy of each new key, and only you can export it to a file. Nothing is uploaded or synced.</string>
     <string name="privacy_network">Internet use</string>
-    <string name="privacy_network_body">fidont uses the internet only when you scan a QR code. Your phone and the other device then connect through a relay at cable.ahhkeysummo2d.com, operated by z1xus and served through Cloudflare. Messages are end-to-end encrypted, so the relay and Cloudflare can\'t read them. Both can see your IP address and the time of the connection. The relay keeps no logs.</string>
+    <string name="privacy_network_body">fidont uses the internet only when you scan a QR code. Your phone and the other device then connect through a relay. Messages are end-to-end encrypted, so a relay can\'t read them. It can see your IP address and the time of the connection. The default relay is cable.ahhkeysummo2d.com, operated by z1xus and served through Cloudflare, and it keeps no logs. You can choose Google\'s relay or your own in Settings.</string>
     <string name="privacy_dongle">Dongle</string>
     <string name="privacy_dongle_body">The dongle stores no passkeys. It forwards requests from the computer to this phone over an encrypted Bluetooth link.</string>
     <string name="privacy_permissions">Permissions</string>
@@ -170,6 +180,7 @@
     <string name="privacy_nearby_body">Shows the other device that your phone is near, and reaches the dongle.</string>
     <string name="privacy_third_parties">Third parties</string>
     <string name="privacy_cloudflare">Cloudflare privacy policy</string>
+    <string name="privacy_google">Google privacy policy</string>
     <string name="privacy_contact">Contact</string>
 
     <string name="licenses_app">App</string>

@@ -42,6 +42,7 @@ private val LIBRARIES =
     )
 
 private const val CLOUDFLARE_PRIVACY = "https://www.cloudflare.com/privacypolicy/"
+private const val GOOGLE_PRIVACY = "https://policies.google.com/privacy"
 
 private val PRIVACY =
     listOf(
@@ -74,7 +75,8 @@ fun PrivacyScreen(onBack: () -> Unit) {
             item { Entry(index, PERMISSIONS.size, stringResource(title), supporting = stringResource(body)) }
         }
         item { SectionHeader(R.string.privacy_third_parties) }
-        item { Entry(0, 1, stringResource(R.string.privacy_cloudflare), onClick = { links.openUri(CLOUDFLARE_PRIVACY) }) }
+        item { Entry(0, 2, stringResource(R.string.privacy_cloudflare), onClick = { links.openUri(CLOUDFLARE_PRIVACY) }) }
+        item { Entry(1, 2, stringResource(R.string.privacy_google), onClick = { links.openUri(GOOGLE_PRIVACY) }) }
         item { SectionHeader(R.string.privacy_contact) }
         item { Entry(0, 1, AUTHOR.removePrefix("https://"), onClick = { links.openUri(AUTHOR) }) }
     }
