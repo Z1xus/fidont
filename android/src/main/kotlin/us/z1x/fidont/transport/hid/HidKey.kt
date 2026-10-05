@@ -88,8 +88,9 @@ class HidKey(
                     ) {
                         if (registered) {
                             status.value = HidStatus.Ready()
-                            // a computer waits for its key to come back
-                            preferences.getString(HOST, null)?.let(::connect)
+                            // a computer waits for its key to come back, one that was unpaired must pair again
+                            val last = preferences.getString(HOST, null)
+                            if (computers.any { it.address == last }) connect(last!!)
                         } else {
                             status.value = HidStatus.Starting
                             val callback = this

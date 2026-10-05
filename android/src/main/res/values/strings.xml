@@ -83,11 +83,11 @@
     <string name="bluetooth_connecting_body">Keep the computer nearby.</string>
     <string name="bluetooth_starting">Starting…</string>
     <string name="bluetooth_starting_body">Keep fidont open.</string>
-    <string name="bluetooth_ready_body">Choose a paired computer, or pair a new one.</string>
+    <string name="bluetooth_ready_body">Choose a paired computer. For a new one, make this phone visible and pair it from the computer.</string>
     <string name="bluetooth_failed_body">Couldn\'t connect. Remove this phone on the computer, then pair it again while fidont is open.</string>
     <string name="bluetooth_visible_body">Visible as %1$s. Pair it in your computer\'s Bluetooth settings now.</string>
     <string name="bluetooth_paired">Paired computers</string>
-    <string name="bluetooth_pair">Pair a new computer</string>
+    <string name="bluetooth_pair">Make this phone visible</string>
     <string name="bluetooth_disconnect">Disconnect</string>
     <string name="bluetooth_allow_body">fidont needs it to reach your computer.</string>
     <string name="bluetooth_off">Bluetooth is off</string>
