@@ -50,7 +50,7 @@
 
     <string name="dongle">Dongle</string>
     <string name="dongle_none">Not set up</string>
-    <string name="dongle_none_body">Plug an ESP32-S3 board into this phone to make a USB security key.</string>
+    <string name="dongle_none_body">Plug an ESP32-S3 board into this phone to make a USB security key. If it doesn\'t show, hold BOOT while you plug it in.</string>
     <string name="dongle_found">Board found</string>
     <string name="dongle_found_body">Ready to set up as your dongle.</string>
     <string name="dongle_set_up">Set up</string>

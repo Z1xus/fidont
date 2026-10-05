@@ -48,7 +48,7 @@ static const tusb_desc_device_t device_descriptor = {
     .bNumConfigurations = 1,
 };
 
-static const char *strings[] = {(const char[]){0x09, 0x04}, "fidont", "fidont dongle"};
+static const char *strings[] = {(const char[]){0x09, 0x04}, "fidont", "dongle"};
 
 static const uint8_t configuration[] = {
     TUD_CONFIG_DESCRIPTOR(1, 1, 0, TUD_CONFIG_DESC_LEN + TUD_HID_INOUT_DESC_LEN, 0, 100),
