@@ -83,6 +83,7 @@
     <string name="bluetooth_connecting_body">Accept the request on the computer if it asks.</string>
     <string name="bluetooth_starting">Starting…</string>
     <string name="bluetooth_starting_body">Keep fidont open.</string>
+    <string name="bluetooth_searching">Searching…</string>
     <string name="bluetooth_ready_body">Choose a paired computer, or pair a new one.</string>
     <string name="bluetooth_pairing_body">Choose the computer when it shows.</string>
     <string name="bluetooth_none_body">No computer found. Make it visible in its Bluetooth settings, then try again.</string>

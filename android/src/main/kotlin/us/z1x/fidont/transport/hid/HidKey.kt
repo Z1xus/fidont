@@ -71,6 +71,10 @@ class HidKey(
         searching.value = adapter.startDiscovery()
     }
 
+    fun cancel() {
+        adapter.cancelDiscovery()
+    }
+
     fun connect(address: String) {
         val device = adapter.getRemoteDevice(address)
         adapter.cancelDiscovery()

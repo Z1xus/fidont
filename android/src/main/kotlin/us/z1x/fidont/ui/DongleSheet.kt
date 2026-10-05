@@ -50,7 +50,7 @@ sealed interface DongleState {
     enum class Failure { SetUp, Pair }
 }
 
-enum class DongleAction { SetUp, Pair, Allow, Forget }
+enum class DongleAction { SetUp, Pair, Cancel, Allow, Forget }
 
 @Composable
 fun DongleRow(
@@ -100,6 +100,9 @@ fun DongleSheet(
 
             DongleState.Pairing -> {
                 LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 8.dp))
+                TextButton(onClick = { onAction(DongleAction.Cancel) }, Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.cancel))
+                }
             }
 
             is DongleState.Unpaired -> {

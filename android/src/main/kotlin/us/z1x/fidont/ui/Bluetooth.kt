@@ -79,6 +79,8 @@ sealed interface BluetoothAction {
 
     data object Pair : BluetoothAction
 
+    data object Cancel : BluetoothAction
+
     data object Disconnect : BluetoothAction
 
     class Connect(
@@ -153,6 +155,11 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
             BluetoothAction.Pair -> {
                 searched = true
                 key.search()
+            }
+
+            BluetoothAction.Cancel -> {
+                searched = false
+                key.cancel()
             }
 
             BluetoothAction.Disconnect -> {
@@ -238,6 +245,10 @@ fun BluetoothSheet(
                 }
                 if (state.searching) {
                     LinearProgressIndicator(Modifier.fillMaxWidth().padding(start = 24.dp, top = 32.dp, end = 24.dp, bottom = 8.dp))
+                    TextButton(
+                        onClick = { onAction(BluetoothAction.Cancel) },
+                        Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                    ) { Text(stringResource(R.string.cancel)) }
                 } else {
                     TextButton(
                         onClick = { onAction(BluetoothAction.Pair) },
@@ -276,7 +287,7 @@ private fun title(state: BluetoothState): String =
         BluetoothState.Off -> stringResource(R.string.bluetooth_off)
         BluetoothState.NeedsBluetooth -> stringResource(R.string.dongle_bluetooth)
         BluetoothState.Starting -> stringResource(R.string.bluetooth_starting)
-        is BluetoothState.Ready -> stringResource(R.string.dongle_searching)
+        is BluetoothState.Ready -> stringResource(if (state.searching) R.string.bluetooth_searching else R.string.dongle_searching)
         is BluetoothState.Connecting -> stringResource(R.string.bluetooth_connecting, state.computer)
         is BluetoothState.Connected -> stringResource(R.string.bluetooth_connected, state.computer)
     }

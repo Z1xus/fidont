@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -51,7 +52,7 @@ fun rememberDongle(): Pair<DongleState, (DongleAction) -> Unit> {
     val status by dongle.status.collectAsState()
     var board by remember { mutableStateOf<UsbDevice?>(null) }
     var progress by remember { mutableStateOf<Float?>(null) }
-    var pairing by remember { mutableStateOf(false) }
+    var pairing by remember { mutableStateOf<Job?>(null) }
     var failure by remember { mutableStateOf<DongleState.Failure?>(null) }
     var allowed by remember {
         mutableStateOf(BLUETOOTH.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED })
@@ -64,12 +65,15 @@ fun rememberDongle(): Pair<DongleState, (DongleAction) -> Unit> {
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
             allowed = granted.values.all { it }
             if (allowed) {
-                scope.launch {
-                    failure = null
-                    pairing = true
-                    if (withTimeoutOrNull(PAIR_TIMEOUT) { dongle.pair() } != true) failure = DongleState.Failure.Pair
-                    pairing = false
-                }
+                failure = null
+                pairing =
+                    scope.launch {
+                        try {
+                            if (withTimeoutOrNull(PAIR_TIMEOUT) { dongle.pair() } != true) failure = DongleState.Failure.Pair
+                        } finally {
+                            pairing = null
+                        }
+                    }
             }
         }
 
@@ -97,7 +101,7 @@ fun rememberDongle(): Pair<DongleState, (DongleAction) -> Unit> {
                 DongleState.SettingUp(progress ?: 0f)
             }
 
-            pairing -> {
+            pairing != null -> {
                 DongleState.Pairing
             }
 
@@ -134,6 +138,10 @@ fun rememberDongle(): Pair<DongleState, (DongleAction) -> Unit> {
 
             DongleAction.Pair -> {
                 pair.launch(BLUETOOTH)
+            }
+
+            DongleAction.Cancel -> {
+                pairing?.cancel()
             }
 
             DongleAction.Allow -> {
