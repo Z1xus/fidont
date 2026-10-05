@@ -78,10 +78,22 @@
 
     <string name="bluetooth">Bluetooth key</string>
     <string name="bluetooth_connected">Connected to %1$s</string>
-    <string name="bluetooth_waiting_body">Tap, then pair this phone in your computer\'s Bluetooth settings.</string>
+    <string name="bluetooth_connected_body">Pick the USB security key option in your browser.</string>
+    <string name="bluetooth_connecting">Connecting to %1$s…</string>
+    <string name="bluetooth_connecting_body">Keep the computer nearby.</string>
+    <string name="bluetooth_starting">Starting…</string>
+    <string name="bluetooth_starting_body">Keep fidont open.</string>
+    <string name="bluetooth_ready_body">Choose a paired computer, or pair a new one.</string>
+    <string name="bluetooth_failed_body">Couldn\'t connect. Remove this phone on the computer, then pair it again while fidont is open.</string>
+    <string name="bluetooth_visible_body">Visible as %1$s. Pair it in your computer\'s Bluetooth settings now.</string>
+    <string name="bluetooth_paired">Paired computers</string>
+    <string name="bluetooth_pair">Pair a new computer</string>
+    <string name="bluetooth_disconnect">Disconnect</string>
     <string name="bluetooth_allow_body">fidont needs it to reach your computer.</string>
-    <string name="bluetooth_unavailable">Not supported</string>
-    <string name="bluetooth_unavailable_body">This phone doesn\'t let apps act as a Bluetooth device.</string>
+    <string name="bluetooth_off">Bluetooth is off</string>
+    <string name="bluetooth_off_body">Turn it on to use this.</string>
+    <string name="bluetooth_unsupported">Not supported</string>
+    <string name="bluetooth_unsupported_body">This phone doesn\'t let apps act as a Bluetooth device.</string>
 
     <string name="settings">Settings</string>
     <string name="security">Security</string>

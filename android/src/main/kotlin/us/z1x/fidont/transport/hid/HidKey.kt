@@ -1,6 +1,7 @@
 package us.z1x.fidont.transport.hid
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
@@ -10,11 +11,15 @@ import android.content.Context
 import androidx.core.content.edit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import us.z1x.fidont.app
+import kotlin.time.Duration.Companion.seconds
 
 private const val HOST = "host"
+private val RETRY = 2.seconds
 
 // a FIDO HID device with one 64 byte input report and one 64 byte output report
 private val DESCRIPTOR = "06d0f10901a1010920150026ff007508954081020921150026ff00750895409102c0".hexToByteArray()
@@ -22,9 +27,19 @@ private val SETTINGS =
     BluetoothHidDeviceAppSdpSettings("fidont", "Security key", "fidont", BluetoothHidDevice.SUBCLASS1_NONE, DESCRIPTOR)
 
 sealed interface HidStatus {
-    data object Unavailable : HidStatus
+    data object Unsupported : HidStatus
 
-    data object Waiting : HidStatus
+    data object Off : HidStatus
+
+    data object Starting : HidStatus
+
+    data class Ready(
+        val failed: Boolean = false,
+    ) : HidStatus
+
+    data class Connecting(
+        val name: String,
+    ) : HidStatus
 
     data class Connected(
         val name: String,
@@ -37,14 +52,33 @@ class HidKey(
     private val context: Context,
 ) {
     private val preferences = context.getSharedPreferences("hid", Context.MODE_PRIVATE)
-    val status = MutableStateFlow<HidStatus>(HidStatus.Waiting)
+    private val adapter = context.getSystemService(BluetoothManager::class.java).adapter
+    private var hid: BluetoothHidDevice? = null
+    private var host: BluetoothDevice? = null
+    val status = MutableStateFlow<HidStatus>(HidStatus.Starting)
+
+    val name: String get() = adapter.name
+
+    val computers: List<BluetoothDevice>
+        get() = adapter.bondedDevices.filter { it.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.COMPUTER }
+
+    fun connect(address: String) {
+        val device = adapter.getRemoteDevice(address)
+        if (hid?.connect(device) == true) status.value = HidStatus.Connecting(device.label)
+    }
+
+    fun disconnect() {
+        preferences.edit { remove(HOST) }
+        host?.let { hid?.disconnect(it) }
+    }
 
     // Android only keeps the key registered while the app is in front
     suspend fun serve() {
-        val adapter = context.getSystemService(BluetoothManager::class.java).adapter
+        if (adapter?.isEnabled != true) {
+            status.value = HidStatus.Off
+            return
+        }
         withContext(Dispatchers.Default.limitedParallelism(1)) {
-            var hid: BluetoothHidDevice? = null
-            var host: BluetoothDevice? = null
             val ctap = CtapHid(this, context.app.authenticator) { packet -> host?.let { hid?.sendReport(it, 0, packet) } }
             val callback =
                 object : BluetoothHidDevice.Callback() {
@@ -52,26 +86,39 @@ class HidKey(
                         pluggedDevice: BluetoothDevice?,
                         registered: Boolean,
                     ) {
-                        if (!registered) {
-                            status.value = HidStatus.Unavailable
-                            return
+                        if (registered) {
+                            status.value = HidStatus.Ready()
+                            // a computer waits for its key to come back
+                            preferences.getString(HOST, null)?.let(::connect)
+                        } else {
+                            status.value = HidStatus.Starting
+                            val callback = this
+                            launch {
+                                delay(RETRY)
+                                hid?.registerApp(SETTINGS, null, null, Runnable::run, callback)
+                            }
                         }
-                        status.value = HidStatus.Waiting
-                        // a computer waits for its key to come back
-                        preferences.getString(HOST, null)?.let { hid?.connect(adapter.getRemoteDevice(it)) }
                     }
 
                     override fun onConnectionStateChanged(
                         device: BluetoothDevice,
                         state: Int,
                     ) {
-                        if (state == BluetoothProfile.STATE_CONNECTED) {
-                            host = device
-                            preferences.edit { putString(HOST, device.address) }
-                            status.value = HidStatus.Connected(device.name ?: device.address)
-                        } else if (state == BluetoothProfile.STATE_DISCONNECTED && device == host) {
-                            host = null
-                            status.value = HidStatus.Waiting
+                        when (state) {
+                            BluetoothProfile.STATE_CONNECTED -> {
+                                host = device
+                                preferences.edit { putString(HOST, device.address) }
+                                status.value = HidStatus.Connected(device.label)
+                            }
+
+                            BluetoothProfile.STATE_CONNECTING -> {
+                                status.value = HidStatus.Connecting(device.label)
+                            }
+
+                            BluetoothProfile.STATE_DISCONNECTED -> {
+                                if (device == host) host = null
+                                status.value = HidStatus.Ready(failed = status.value is HidStatus.Connecting)
+                            }
                         }
                     }
 
@@ -105,8 +152,8 @@ class HidKey(
                         hid = null
                     }
                 }
-            if (adapter?.getProfileProxy(context, listener, BluetoothProfile.HID_DEVICE) != true) {
-                status.value = HidStatus.Unavailable
+            if (!adapter.getProfileProxy(context, listener, BluetoothProfile.HID_DEVICE)) {
+                status.value = HidStatus.Unsupported
                 return@withContext
             }
             try {
@@ -114,8 +161,12 @@ class HidKey(
             } finally {
                 hid?.unregisterApp()
                 adapter.closeProfileProxy(BluetoothProfile.HID_DEVICE, hid)
-                status.value = HidStatus.Waiting
+                hid = null
+                host = null
+                status.value = HidStatus.Starting
             }
         }
     }
+
+    private val BluetoothDevice.label get() = name ?: address
 }

@@ -65,6 +65,7 @@ fun Home(
     var dongleOpen by remember { mutableStateOf(false) }
     val (dongle, onDongle) = rememberDongle()
     val (bluetooth, onBluetooth) = rememberBluetooth()
+    var bluetoothOpen by remember { mutableStateOf(false) }
     val board = (dongle as? DongleState.Unpaired)?.board == true
     val credentials by produceState(emptyList<Credential>()) {
         val query = app.credentials.all()
@@ -85,8 +86,12 @@ fun Home(
         onProvider = setup.onProvider,
         onPasskey = { opened = it },
         onDongle = { dongleOpen = true },
-        onBluetooth = onBluetooth,
+        onBluetooth = { bluetoothOpen = true },
     )
+
+    if (bluetoothOpen) {
+        ModalBottomSheet(onDismissRequest = { bluetoothOpen = false }) { BluetoothSheet(bluetooth, onBluetooth) }
+    }
 
     if (dongleOpen) {
         ModalBottomSheet(onDismissRequest = { dongleOpen = false }) {
