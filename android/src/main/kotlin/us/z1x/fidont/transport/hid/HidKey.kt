@@ -1,13 +1,17 @@
 package us.z1x.fidont.transport.hid
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import androidx.core.content.edit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
@@ -55,16 +59,29 @@ class HidKey(
     private val adapter = context.getSystemService(BluetoothManager::class.java).adapter
     private var hid: BluetoothHidDevice? = null
     private var host: BluetoothDevice? = null
+    private var pairing: String? = null
     val status = MutableStateFlow<HidStatus>(HidStatus.Starting)
-
-    val name: String get() = adapter.name
+    val nearby = MutableStateFlow(emptyList<BluetoothDevice>())
+    val searching = MutableStateFlow(false)
 
     val computers: List<BluetoothDevice>
-        get() = adapter.bondedDevices.filter { it.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.COMPUTER }
+        get() = adapter.bondedDevices.filter { it.computer }
+
+    // the computer must be visible, which it is while its Bluetooth settings are open
+    fun search() {
+        nearby.value = emptyList()
+        searching.value = adapter.startDiscovery()
+    }
 
     fun connect(address: String) {
         val device = adapter.getRemoteDevice(address)
-        if (hid?.connect(device) == true) status.value = HidStatus.Connecting(device.label)
+        adapter.cancelDiscovery()
+        if (device.bondState == BluetoothDevice.BOND_BONDED) {
+            if (hid?.connect(device) == true) status.value = HidStatus.Connecting(device.label)
+        } else if (device.createBond()) {
+            pairing = address
+            status.value = HidStatus.Connecting(device.label)
+        }
     }
 
     fun disconnect() {
@@ -157,9 +174,52 @@ class HidKey(
                 status.value = HidStatus.Unsupported
                 return@withContext
             }
+            val receiver =
+                object : BroadcastReceiver() {
+                    override fun onReceive(
+                        context: Context,
+                        intent: Intent,
+                    ) {
+                        val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                        when (intent.action) {
+                            BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
+                                searching.value = false
+                            }
+
+                            BluetoothDevice.ACTION_FOUND -> {
+                                if (device != null && device.computer && device.name != null && device !in computers) {
+                                    nearby.value = (nearby.value + device).distinct()
+                                }
+                            }
+
+                            BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
+                                if (device?.address != pairing) return
+                                when (device?.bondState) {
+                                    BluetoothDevice.BOND_BONDED -> {
+                                        pairing = null
+                                        nearby.value -= device
+                                        connect(device.address)
+                                    }
+
+                                    BluetoothDevice.BOND_NONE -> {
+                                        pairing = null
+                                        status.value = HidStatus.Ready(failed = true)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            val events = IntentFilter(BluetoothDevice.ACTION_FOUND)
+            events.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+            events.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+            context.registerReceiver(receiver, events, Context.RECEIVER_NOT_EXPORTED)
             try {
                 awaitCancellation()
             } finally {
+                context.unregisterReceiver(receiver)
+                adapter.cancelDiscovery()
+                searching.value = false
                 hid?.unregisterApp()
                 adapter.closeProfileProxy(BluetoothProfile.HID_DEVICE, hid)
                 hid = null
@@ -173,4 +233,6 @@ class HidKey(
     private fun packet(data: ByteArray) = data.copyOfRange(maxOf(0, data.size - PACKET_SIZE), data.size)
 
     private val BluetoothDevice.label get() = name ?: address
+
+    private val BluetoothDevice.computer get() = bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.COMPUTER
 }

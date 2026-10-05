@@ -40,7 +40,7 @@ import us.z1x.fidont.app
 import us.z1x.fidont.transport.hid.HidStatus
 import kotlin.time.Duration.Companion.seconds
 
-private val PERMISSIONS = arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_ADVERTISE)
+private val PERMISSIONS = arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
 
 class Computer(
     val name: String,
@@ -56,10 +56,10 @@ sealed interface BluetoothState {
 
     data object Starting : BluetoothState
 
-    // visible holds the name that the phone shows to a computer that searches for it
     class Ready(
         val computers: List<Computer>,
-        val visible: String? = null,
+        val nearby: List<Computer> = emptyList(),
+        val searching: Boolean = false,
         val failed: Boolean = false,
     ) : BluetoothState
 
@@ -75,7 +75,7 @@ sealed interface BluetoothState {
 sealed interface BluetoothAction {
     data object Allow : BluetoothAction
 
-    data object Pair : BluetoothAction
+    data object Search : BluetoothAction
 
     data object Disconnect : BluetoothAction
 
@@ -90,7 +90,8 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
     val lifecycle = LocalLifecycleOwner.current
     val key = context.app.hid
     val status by key.status.collectAsState()
-    var visible by remember { mutableIntStateOf(0) }
+    val nearby by key.nearby.collectAsState()
+    val searching by key.searching.collectAsState()
     var allowed by remember {
         mutableStateOf(PERMISSIONS.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED })
     }
@@ -98,22 +99,11 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
             allowed = granted.values.all { it }
         }
-    // the result code is the time in seconds that the phone stays visible
-    val show =
-        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode != Activity.RESULT_CANCELED) visible = result.resultCode
-        }
-
     if (allowed) {
         LaunchedEffect(Unit) {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { key.serve() }
         }
     }
-    LaunchedEffect(visible) {
-        delay(visible.seconds)
-        visible = 0
-    }
-
     val state =
         when (val current = status.takeIf { allowed }) {
             null -> {
@@ -143,7 +133,8 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
             is HidStatus.Ready -> {
                 BluetoothState.Ready(
                     computers = key.computers.map { Computer(it.name ?: it.address, it.address) },
-                    visible = key.name.takeIf { visible > 0 },
+                    nearby = nearby.map { Computer(it.name ?: it.address, it.address) },
+                    searching = searching,
                     failed = current.failed,
                 )
             }
@@ -151,7 +142,7 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
     return state to { action ->
         when (action) {
             BluetoothAction.Allow -> allow.launch(PERMISSIONS)
-            BluetoothAction.Pair -> show.launch(Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE))
+            BluetoothAction.Search -> key.search()
             BluetoothAction.Disconnect -> key.disconnect()
             is BluetoothAction.Connect -> key.connect(action.address)
         }
@@ -224,10 +215,18 @@ fun BluetoothSheet(
                 state.computers.forEachIndexed { index, computer ->
                     Entry(index, state.computers.size, computer.name, onClick = { onAction(BluetoothAction.Connect(computer.address)) })
                 }
-                TextButton(
-                    onClick = { onAction(BluetoothAction.Pair) },
-                    Modifier.fillMaxWidth().padding(start = 24.dp, top = 24.dp, end = 24.dp),
-                ) { Text(stringResource(R.string.bluetooth_pair)) }
+                if (state.nearby.isNotEmpty()) SectionHeader(R.string.bluetooth_nearby, Modifier.fillMaxWidth())
+                state.nearby.forEachIndexed { index, computer ->
+                    Entry(index, state.nearby.size, computer.name, onClick = { onAction(BluetoothAction.Connect(computer.address)) })
+                }
+                if (state.searching) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(start = 24.dp, top = 32.dp, end = 24.dp, bottom = 8.dp))
+                } else {
+                    TextButton(
+                        onClick = { onAction(BluetoothAction.Search) },
+                        Modifier.fillMaxWidth().padding(start = 24.dp, top = 24.dp, end = 24.dp),
+                    ) { Text(stringResource(R.string.bluetooth_search)) }
+                }
             }
 
             is BluetoothState.Connected -> {
@@ -294,7 +293,7 @@ private fun body(state: BluetoothState): String =
 
         is BluetoothState.Ready -> {
             when {
-                state.visible != null -> stringResource(R.string.bluetooth_visible_body, state.visible)
+                state.searching -> stringResource(R.string.bluetooth_searching_body)
                 state.failed -> stringResource(R.string.bluetooth_failed_body)
                 else -> stringResource(R.string.bluetooth_ready_body)
             }
