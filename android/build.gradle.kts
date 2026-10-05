@@ -14,8 +14,8 @@ android {
         applicationId = "us.z1x.fidont"
         minSdk = 34
         targetSdk = 37
-        versionCode = 10
-        versionName = "0.1.9"
+        versionCode = 11
+        versionName = "0.1.10"
         buildConfigField("String", "COMMIT", "\"${commit.get().trim()}\"")
     }
 
