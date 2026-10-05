@@ -16,5 +16,9 @@ interface KeyStore {
         salt: ByteArray,
     ): ByteArray?
 
+    fun publicKey(id: ByteArray): ByteArray?
+
+    suspend fun verify(): Boolean
+
     fun delete(id: ByteArray)
 }

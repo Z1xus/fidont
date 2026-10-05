@@ -9,6 +9,7 @@
     <string name="prompt_choose">Choose an account</string>
     <string name="prompt_backup">Turn on backup</string>
     <string name="prompt_export">Export passkeys</string>
+    <string name="prompt_verify">Verify it\'s you</string>
 
     <string name="onboarding_welcome">Sign in with this phone</string>
     <string name="onboarding_welcome_body">fidont keeps your passkeys here and signs you in to apps, websites, and other computers.</string>

@@ -22,6 +22,7 @@ import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.PrivateKey
+import java.security.PublicKey
 import java.security.Signature
 import java.security.spec.ECGenParameterSpec
 import java.security.spec.PKCS8EncodedKeySpec
@@ -38,6 +39,7 @@ private const val CURVE = "secp256r1"
 private const val GCM = "AES/GCM/NoPadding"
 private const val SECRET = ".secret"
 private const val WRAP = "backup"
+private const val VERIFY = "verify"
 private const val POINT_SIZE = 65
 private const val SECRET_SIZE = 32
 private const val IV_SIZE = 12
@@ -88,10 +90,16 @@ class AndroidKeyStore(
                     generateKeyPair()
                 }
             }
-        // the X.509 encoding of a P-256 key ends with the uncompressed point
-        return pair.public.encoded
-            .takeLast(POINT_SIZE)
-            .toByteArray()
+        return point(pair.public)
+    }
+
+    override fun publicKey(id: ByteArray): ByteArray? = store.getCertificate(id.toHexString())?.publicKey?.let(::point)
+
+    override suspend fun verify(): Boolean {
+        if (!secure) return false
+        generateUnlockKey(VERIFY)
+        val cipher = Cipher.getInstance(GCM).apply { init(Cipher.ENCRYPT_MODE, store.getKey(VERIFY, null)) }
+        return PromptActivity.unlock(context, R.string.prompt_verify, cipher) != null
     }
 
     override suspend fun sign(
@@ -167,20 +175,7 @@ class AndroidKeyStore(
             return
         }
         if (!secure) return
-        KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, PROVIDER).run {
-            init(
-                KeyGenParameterSpec
-                    .Builder(WRAP, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
-                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                    .setKeySize(256)
-                    .setUserAuthenticationRequired(true)
-                    .setUserAuthenticationParameters(0, AUTHENTICATORS)
-                    .setIsStrongBoxBacked(strongBox)
-                    .build(),
-            )
-            generateKey()
-        }
+        generateUnlockKey(WRAP)
         val cipher = Cipher.getInstance(GCM).apply { init(Cipher.ENCRYPT_MODE, store.getKey(WRAP, null)) }
         val unlocked = PromptActivity.unlock(context, R.string.prompt_backup, cipher) ?: return
         val key = ecdhGenerate()
@@ -191,6 +186,16 @@ class AndroidKeyStore(
     fun exportable(id: ByteArray) = File(copies, id.toHexString()).exists()
 
     suspend fun export(credentials: List<Credential>): List<BackupEntry>? {
+        val private = unlock(R.string.prompt_export) ?: return null
+        val public = wrap.readBytes().copyOf(POINT_SIZE)
+        return credentials.mapNotNull { credential ->
+            val copy = File(copies, credential.id.toHexString()).takeIf(File::exists) ?: return@mapNotNull null
+            val parts = Cbor.decode(openWith(private, public, copy.readBytes()) ?: return@mapNotNull null) as List<*>
+            BackupEntry(credential, parts[0] as ByteArray, parts[1] as ByteArray, parts[2] as ByteArray)
+        }
+    }
+
+    private suspend fun unlock(title: Int): ByteArray? {
         val file = wrap.readBytes()
         val cipher = Cipher.getInstance(GCM)
         try {
@@ -198,12 +203,27 @@ class AndroidKeyStore(
         } catch (_: InvalidKeyException) {
             return null
         }
-        val unlocked = PromptActivity.unlock(context, R.string.prompt_export, cipher) ?: return null
-        val private = unlocked.doFinal(file, POINT_SIZE + IV_SIZE, file.size - POINT_SIZE - IV_SIZE)
-        return credentials.mapNotNull { credential ->
-            val copy = File(copies, credential.id.toHexString()).takeIf(File::exists) ?: return@mapNotNull null
-            val parts = Cbor.decode(openWith(private, file.copyOf(POINT_SIZE), copy.readBytes()) ?: return@mapNotNull null) as List<*>
-            BackupEntry(credential, parts[0] as ByteArray, parts[1] as ByteArray, parts[2] as ByteArray)
+        val unlocked = PromptActivity.unlock(context, title, cipher) ?: return null
+        return unlocked.doFinal(file, POINT_SIZE + IV_SIZE, file.size - POINT_SIZE - IV_SIZE)
+    }
+
+    private fun generateUnlockKey(alias: String) {
+        KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, PROVIDER).run {
+            init(
+                KeyGenParameterSpec
+                    .Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setKeySize(256)
+                    .setUserAuthenticationRequired(true)
+                    .setUserAuthenticationParameters(0, AUTHENTICATORS)
+                    .setIsStrongBoxBacked(strongBox)
+                    .build(),
+            )
+            generateKey()
         }
     }
+
+    // the X.509 encoding of a P-256 key ends with the uncompressed point
+    private fun point(key: PublicKey) = key.encoded.takeLast(POINT_SIZE).toByteArray()
 }

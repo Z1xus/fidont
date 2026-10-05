@@ -4,16 +4,21 @@ import us.z1x.fidont.aesCbc
 import us.z1x.fidont.cbor.Cbor
 import us.z1x.fidont.ecdh
 import us.z1x.fidont.ecdhGenerate
+import us.z1x.fidont.hkdf
 import us.z1x.fidont.hmac
 import us.z1x.fidont.random
 import us.z1x.fidont.sha256
 import us.z1x.fidont.store.Credential
 import us.z1x.fidont.store.CredentialQueries
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.TimeSource
 
 const val MAKE_CREDENTIAL = 0x01
 const val GET_ASSERTION = 0x02
 private const val GET_INFO = 0x04
 private const val CLIENT_PIN = 0x06
+private const val CREDENTIAL_MANAGEMENT = 0x0a
+private const val SELECTION = 0x0b
 
 const val OK = 0x00
 private const val INVALID_COMMAND = 0x01
@@ -25,6 +30,7 @@ private const val CREDENTIAL_EXCLUDED = 0x19
 const val UNSUPPORTED_ALGORITHM = 0x26
 private const val OPERATION_DENIED = 0x27
 private const val NO_CREDENTIALS = 0x2e
+private const val NOT_ALLOWED = 0x30
 private const val PIN_AUTH_INVALID = 0x33
 private const val INVALID_SUBCOMMAND = 0x3e
 
@@ -36,13 +42,29 @@ private const val EXTENSIONS = 0x80
 const val ES256 = -7L
 private const val ECDH_ES_HKDF_256 = -25L
 private const val HMAC_SECRET = "hmac-secret"
-private const val PIN_PROTOCOL = 1
 private const val KEY_AGREEMENT = 2L
+private const val UV_TOKEN = 6L
+private const val UV_RETRIES = 7L
+private const val UV_ATTEMPTS = 3
+private const val MAKE = 1L
+private const val GET = 2L
+private const val MANAGE = 4L
+private const val METADATA = 1L
+private const val RPS = 2L
+private const val NEXT_RP = 3L
+private const val CREDENTIALS = 4L
+private const val NEXT_CREDENTIAL = 5L
+private const val DELETE = 6L
+private const val UPDATE = 7L
+private const val SPARE_CREDENTIALS = 1000
 private const val SALT_SIZE = 32
-private const val SALT_AUTH_SIZE = 16
+private const val KEY_SIZE = 32
+private const val BLOCK_SIZE = 16
 private const val CREDENTIAL_ID_SIZE = 32
 private const val MAX_MESSAGE_SIZE = 4096
 private const val MAX_ALLOW_LIST = 16
+private val PIN_PROTOCOLS = listOf(2, 1)
+private val TOKEN_LIFETIME = 10.minutes
 private val AAGUID = "f1d0badc0def4f1d8badc0def1d0badc".hexToByteArray()
 
 // a probe cannot unlock the key, and the platform only reads which credential answered
@@ -65,25 +87,74 @@ class Assertion(
     val signature: ByteArray,
 )
 
+private class Token(
+    val value: ByteArray,
+    val protocol: Long,
+    val permissions: Long,
+    val rpId: String?,
+) {
+    val expires = TimeSource.Monotonic.markNow() + TOKEN_LIFETIME
+}
+
+private class Shared(
+    private val protocol: Long,
+    point: ByteArray,
+) {
+    private val authKey = if (protocol == 2L) hkdf(point, ByteArray(0), "CTAP2 HMAC key".encodeToByteArray(), KEY_SIZE) else sha256(point)
+    private val cipherKey = if (protocol == 2L) hkdf(point, ByteArray(0), "CTAP2 AES key".encodeToByteArray(), KEY_SIZE) else authKey
+
+    // protocol 1 has a zero iv and does not send it
+    private val ivSize = if (protocol == 2L) BLOCK_SIZE else 0
+
+    fun verify(
+        message: ByteArray,
+        tag: ByteArray,
+    ) = verified(protocol, authKey, message, tag)
+
+    fun encrypt(data: ByteArray): ByteArray {
+        val iv = random(ivSize)
+        return iv + aesCbc(true, cipherKey, iv.copyOf(BLOCK_SIZE), data)
+    }
+
+    fun decrypt(data: ByteArray): ByteArray {
+        if (data.size < ivSize || data.size % BLOCK_SIZE != 0) throw CtapException(INVALID_LENGTH)
+        return aesCbc(false, cipherKey, data.copyOf(ivSize).copyOf(BLOCK_SIZE), data.copyOfRange(ivSize, data.size))
+    }
+}
+
+private fun verified(
+    protocol: Long,
+    key: ByteArray,
+    message: ByteArray,
+    tag: ByteArray,
+): Boolean {
+    val expected = hmac(key, message).copyOf(if (protocol == 2L) KEY_SIZE else BLOCK_SIZE)
+    // the comparison must take the same time for every tag
+    return tag.size == expected.size && tag.indices.fold(0) { bits, index -> bits or (tag[index].toInt() xor expected[index].toInt()) } == 0
+}
+
 class Authenticator(
     private val keys: KeyStore,
     private val credentials: CredentialQueries,
     private val choose: suspend (List<Credential>) -> Credential?,
 ) {
     private val agreement = ecdhGenerate()
+    private var token: Token? = null
+    private var enumeration = emptyList<Map<Int, Any>>()
 
     val info: ByteArray =
         Cbor.encode(
             mapOf(
-                1 to listOf("FIDO_2_0"),
+                1 to listOf("FIDO_2_0", "FIDO_2_1"),
                 2 to listOf(HMAC_SECRET),
                 3 to AAGUID,
-                4 to mapOf("rk" to true, "uv" to true),
+                4 to mapOf("rk" to true, "uv" to true, "credMgmt" to true, "pinUvAuthToken" to true),
                 5 to MAX_MESSAGE_SIZE,
-                6 to listOf(PIN_PROTOCOL),
+                6 to PIN_PROTOCOLS,
                 7 to MAX_ALLOW_LIST,
                 8 to CREDENTIAL_ID_SIZE,
                 9 to listOf("usb", "nfc", "hybrid", "internal"),
+                10 to listOf(mapOf("alg" to ES256, "type" to "public-key")),
             ),
         )
 
@@ -96,6 +167,8 @@ class Authenticator(
                     GET_ASSERTION -> Cbor.encode(getAssertion(parameters ?: missing()))
                     GET_INFO -> info
                     CLIENT_PIN -> Cbor.encode(clientPin(parameters ?: missing()))
+                    CREDENTIAL_MANAGEMENT -> manage(parameters ?: missing()).takeIf { it.isNotEmpty() }?.let(Cbor::encode) ?: ByteArray(0)
+                    SELECTION -> if (keys.verify()) ByteArray(0) else throw CtapException(OPERATION_DENIED)
                     else -> throw CtapException(INVALID_COMMAND)
                 }
             byteArrayOf(OK.toByte()) + response
@@ -182,10 +255,13 @@ class Authenticator(
         if (algorithms.none { it is Map<*, *> && it["alg"] == ES256 && it["type"] == "public-key" }) {
             throw CtapException(UNSUPPORTED_ALGORITHM)
         }
+        val clientDataHash = parameters[1L] as? ByteArray ?: missing()
+        val rpId = rp["id"] as? String ?: missing()
+        parameters[8L]?.let { authorize(it, clientDataHash, MAKE, rpId) }
         val registration =
             register(
-                clientDataHash = parameters[1L] as? ByteArray ?: missing(),
-                rpId = rp["id"] as? String ?: missing(),
+                clientDataHash = clientDataHash,
+                rpId = rpId,
                 userId = user["id"] as? ByteArray ?: missing(),
                 userName = user["name"] as? String ?: "",
                 displayName = user["displayName"] as? String ?: "",
@@ -204,6 +280,7 @@ class Authenticator(
         val rpId = parameters[1L] as? String ?: missing()
         val clientDataHash = parameters[2L] as? ByteArray ?: missing()
         val allow = descriptors(parameters[3L])
+        parameters[6L]?.let { authorize(it, clientDataHash, GET, rpId) }
         if ((parameters[5L] as? Map<*, *>)?.get("up") == false) {
             val credential = known(rpId, allow).firstOrNull() ?: throw CtapException(NO_CREDENTIALS)
             return mapOf(
@@ -222,33 +299,130 @@ class Authenticator(
         )
     }
 
-    private fun clientPin(parameters: Map<*, *>): Map<Int, Any> {
-        if (parameters[2L] != KEY_AGREEMENT) throw CtapException(INVALID_SUBCOMMAND)
-        return mapOf(1 to cose(agreement.public, ECDH_ES_HKDF_256))
+    private suspend fun clientPin(parameters: Map<*, *>): Map<Int, Any> =
+        when (parameters[2L]) {
+            KEY_AGREEMENT -> {
+                mapOf(1 to cose(agreement.public, ECDH_ES_HKDF_256))
+            }
+
+            UV_RETRIES -> {
+                mapOf(5 to UV_ATTEMPTS)
+            }
+
+            UV_TOKEN -> {
+                val shared = shared(parameters[1L], parameters[3L])
+                val permissions = parameters[9L] as? Long ?: missing()
+                // a credential asks for the fingerprint itself when it signs
+                if (permissions and (MAKE or GET).inv() != 0L && !keys.verify()) throw CtapException(OPERATION_DENIED)
+                val issued = Token(random(KEY_SIZE), parameters[1L] as Long, permissions, parameters[10L] as? String)
+                token = issued
+                mapOf(2 to shared.encrypt(issued.value))
+            }
+
+            else -> {
+                throw CtapException(INVALID_SUBCOMMAND)
+            }
+        }
+
+    private fun manage(parameters: Map<*, *>): Map<Int, Any> {
+        val command = parameters[1L] as? Long ?: missing()
+        val arguments = parameters[2L] as? Map<*, *>
+        if (command == NEXT_RP || command == NEXT_CREDENTIAL) return next()
+        authorize(parameters[4L], byteArrayOf(command.toByte()) + (arguments?.let(Cbor::encode) ?: ByteArray(0)), MANAGE, null)
+        val stored = credentials.all().executeAsList().filter { it.discoverable }
+        return when (command) {
+            METADATA -> {
+                mapOf(1 to stored.size, 2 to SPARE_CREDENTIALS)
+            }
+
+            RPS -> {
+                first(stored.map { it.rpId }.distinct().map { mapOf(3 to mapOf("id" to it), 4 to sha256(it.encodeToByteArray())) }, 5)
+            }
+
+            CREDENTIALS -> {
+                val hash = arguments?.get(1L) as? ByteArray ?: missing()
+                first(stored.filter { sha256(it.rpId.encodeToByteArray()).contentEquals(hash) }.mapNotNull(::entry), 9)
+            }
+
+            DELETE -> {
+                remove(target(arguments))
+                emptyMap()
+            }
+
+            UPDATE -> {
+                val user = arguments?.get(3L) as? Map<*, *> ?: missing()
+                credentials.rename(user["name"] as? String ?: "", user["displayName"] as? String ?: "", target(arguments).id)
+                emptyMap()
+            }
+
+            else -> {
+                throw CtapException(INVALID_SUBCOMMAND)
+            }
+        }
+    }
+
+    private fun first(
+        items: List<Map<Int, Any>>,
+        total: Int,
+    ): Map<Int, Any> {
+        enumeration = items.drop(1)
+        return (items.firstOrNull() ?: throw CtapException(NO_CREDENTIALS)) + (total to items.size)
+    }
+
+    private fun next(): Map<Int, Any> {
+        val item = enumeration.firstOrNull() ?: throw CtapException(NOT_ALLOWED)
+        enumeration = enumeration.drop(1)
+        return item
+    }
+
+    private fun entry(credential: Credential): Map<Int, Any>? {
+        val publicKey = keys.publicKey(credential.id) ?: return null
+        return mapOf(
+            6 to mapOf("id" to credential.userId, "name" to credential.userName, "displayName" to credential.displayName),
+            7 to mapOf("id" to credential.id, "type" to "public-key"),
+            8 to cose(publicKey, ES256),
+        )
+    }
+
+    private fun target(arguments: Map<*, *>?): Credential {
+        val id = (arguments?.get(2L) as? Map<*, *>)?.get("id") as? ByteArray ?: missing()
+        return credentials.byId(id).executeAsOneOrNull() ?: throw CtapException(NO_CREDENTIALS)
+    }
+
+    private fun authorize(
+        tag: Any?,
+        message: ByteArray,
+        permission: Long,
+        rpId: String?,
+    ) {
+        val granted = token?.takeIf { it.expires.hasNotPassedNow() && it.permissions and permission != 0L && (it.rpId ?: rpId) == rpId }
+        if (granted == null || tag !is ByteArray || !verified(granted.protocol, granted.value, message, tag)) {
+            throw CtapException(PIN_AUTH_INVALID)
+        }
+    }
+
+    private fun shared(
+        protocol: Any?,
+        key: Any?,
+    ): Shared {
+        if (protocol != 1L && protocol != 2L) throw CtapException(INVALID_PARAMETER)
+        val peer = key as? Map<*, *> ?: missing()
+        val x = peer[-2L] as? ByteArray ?: missing()
+        val y = peer[-3L] as? ByteArray ?: missing()
+        return Shared(protocol as Long, ecdh(agreement.private, byteArrayOf(4) + x + y) ?: throw CtapException(INVALID_PARAMETER))
     }
 
     private fun secrets(
         credential: Credential,
         input: Map<*, *>,
     ): ByteArray? {
-        val peer = input[1L] as? Map<*, *> ?: missing()
-        val x = peer[-2L] as? ByteArray ?: missing()
-        val y = peer[-3L] as? ByteArray ?: missing()
-        val salts = input[2L] as? ByteArray ?: missing()
-        val auth = input[3L] as? ByteArray ?: missing()
-        val shared = sha256(ecdh(agreement.private, byteArrayOf(4) + x + y) ?: throw CtapException(INVALID_PARAMETER))
-        val tag = hmac(shared, salts)
-        if (auth.size != SALT_AUTH_SIZE) throw CtapException(PIN_AUTH_INVALID)
-        // the comparison must take the same time for every tag
-        val difference = auth.indices.fold(0) { bits, index -> bits or (auth[index].toInt() xor tag[index].toInt()) }
-        if (difference != 0) throw CtapException(PIN_AUTH_INVALID)
+        val shared = shared(input[4L] ?: 1L, input[1L])
+        val encrypted = input[2L] as? ByteArray ?: missing()
+        if (!shared.verify(encrypted, input[3L] as? ByteArray ?: missing())) throw CtapException(PIN_AUTH_INVALID)
+        val salts = shared.decrypt(encrypted)
         if (salts.size != SALT_SIZE && salts.size != 2 * SALT_SIZE) throw CtapException(INVALID_LENGTH)
-        val outputs =
-            aesCbc(false, shared, salts)
-                .asList()
-                .chunked(SALT_SIZE)
-                .map { keys.hmac(credential.id, it.toByteArray()) ?: return null }
-        return Cbor.encode(mapOf(HMAC_SECRET to aesCbc(true, shared, outputs.reduce(ByteArray::plus))))
+        val outputs = salts.asList().chunked(SALT_SIZE).map { keys.hmac(credential.id, it.toByteArray()) ?: return null }
+        return Cbor.encode(mapOf(HMAC_SECRET to shared.encrypt(outputs.reduce(ByteArray::plus))))
     }
 
     private fun known(

@@ -46,10 +46,11 @@ actual fun hmac(
 actual fun aesCbc(
     encrypt: Boolean,
     key: ByteArray,
+    iv: ByteArray,
     data: ByteArray,
 ): ByteArray =
     Cipher.getInstance("AES/CBC/NoPadding").run {
-        init(if (encrypt) Cipher.ENCRYPT_MODE else Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(ByteArray(16)))
+        init(if (encrypt) Cipher.ENCRYPT_MODE else Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv))
         doFinal(data)
     }
 

@@ -77,6 +77,7 @@ Android 14 lets you turn on more than one passkey provider, so they just show up
 What I'd actually do is keep the daily passkeys in the password manager and register fidont as the 2FA key for the password manager itself, and for the accounts you really care about.
 
 It also supports hmac-secret and PRF, which is what Bitwarden's passkey login and LUKS disk encryption through systemd-cryptenroll need.
+Credential management (CTAP 2.1) works too, so browsers can list and delete the passkeys on it.
 
 ## Privacy
 

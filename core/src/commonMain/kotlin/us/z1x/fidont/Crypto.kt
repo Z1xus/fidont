@@ -9,10 +9,11 @@ expect fun hmac(
     data: ByteArray,
 ): ByteArray
 
-// zero iv, no padding
+// no padding
 expect fun aesCbc(
     encrypt: Boolean,
     key: ByteArray,
+    iv: ByteArray,
     data: ByteArray,
 ): ByteArray
 

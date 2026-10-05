@@ -97,6 +97,6 @@ private fun advert(
     eid: ByteArray,
     key: ByteArray,
 ): ByteArray {
-    val encrypted = aesCbc(true, key.copyOf(32), eid)
+    val encrypted = aesCbc(true, key.copyOf(32), ByteArray(16), eid)
     return encrypted + hmac(key.copyOfRange(32, 64), encrypted).copyOf(4)
 }
