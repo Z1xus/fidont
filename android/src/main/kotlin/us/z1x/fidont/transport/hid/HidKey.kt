@@ -126,7 +126,7 @@ class HidKey(
                         device: BluetoothDevice,
                         reportId: Byte,
                         data: ByteArray,
-                    ) = ctap.receive(data)
+                    ) = ctap.receive(packet(data))
 
                     override fun onSetReport(
                         device: BluetoothDevice,
@@ -134,7 +134,7 @@ class HidKey(
                         id: Byte,
                         data: ByteArray,
                     ) {
-                        ctap.receive(data)
+                        ctap.receive(packet(data))
                         hid?.reportError(device, BluetoothHidDevice.ERROR_RSP_SUCCESS)
                     }
                 }
@@ -167,6 +167,9 @@ class HidKey(
             }
         }
     }
+
+    // Linux puts the report id in front of the packet, also when it is zero
+    private fun packet(data: ByteArray) = data.copyOfRange(maxOf(0, data.size - PACKET_SIZE), data.size)
 
     private val BluetoothDevice.label get() = name ?: address
 }
