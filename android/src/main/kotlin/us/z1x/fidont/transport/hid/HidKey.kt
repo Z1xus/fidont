@@ -59,13 +59,9 @@ class HidKey(
     private val adapter = context.getSystemService(BluetoothManager::class.java).adapter
     private var hid: BluetoothHidDevice? = null
     private var host: BluetoothDevice? = null
-    private var pairing: String? = null
     val status = MutableStateFlow<HidStatus>(HidStatus.Starting)
     val nearby = MutableStateFlow(emptyList<BluetoothDevice>())
     val searching = MutableStateFlow(false)
-    val visible = MutableStateFlow(false)
-
-    val name: String get() = adapter.name
 
     val computers: List<BluetoothDevice>
         get() = adapter.bondedDevices.filter { it.computer }
@@ -80,9 +76,8 @@ class HidKey(
         adapter.cancelDiscovery()
         if (device.bondState == BluetoothDevice.BOND_BONDED) {
             if (hid?.connect(device) == true) status.value = HidStatus.Connecting(device.label)
-        } else if (device.createBond()) {
-            pairing = address
-            status.value = HidStatus.Connecting(device.label)
+        } else {
+            device.createBond()
         }
     }
 
@@ -188,10 +183,6 @@ class HidKey(
                                 searching.value = false
                             }
 
-                            BluetoothAdapter.ACTION_SCAN_MODE_CHANGED -> {
-                                visible.value = adapter.scanMode == BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE
-                            }
-
                             BluetoothDevice.ACTION_FOUND, BluetoothDevice.ACTION_NAME_CHANGED, BluetoothDevice.ACTION_CLASS_CHANGED -> {
                                 if (device != null && device.computer && device.name != null && device !in computers) {
                                     nearby.value = (nearby.value + device).distinct()
@@ -199,17 +190,20 @@ class HidKey(
                             }
 
                             BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
-                                if (device?.address != pairing) return
-                                when (device?.bondState) {
+                                // the computer can also start the pairing
+                                if (device?.computer != true) return
+                                when (device.bondState) {
+                                    BluetoothDevice.BOND_BONDING -> {
+                                        if (status.value is HidStatus.Ready) status.value = HidStatus.Connecting(device.label)
+                                    }
+
                                     BluetoothDevice.BOND_BONDED -> {
-                                        pairing = null
                                         nearby.value -= device
                                         connect(device.address)
                                     }
 
                                     BluetoothDevice.BOND_NONE -> {
-                                        pairing = null
-                                        status.value = HidStatus.Ready(failed = true)
+                                        if (status.value is HidStatus.Connecting) status.value = HidStatus.Ready(failed = true)
                                     }
                                 }
                             }
@@ -220,7 +214,6 @@ class HidKey(
             events.addAction(BluetoothDevice.ACTION_NAME_CHANGED)
             events.addAction(BluetoothDevice.ACTION_CLASS_CHANGED)
             events.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
-            events.addAction(BluetoothAdapter.ACTION_SCAN_MODE_CHANGED)
             events.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
             // the Bluetooth stack is another app, and it sends these
             context.registerReceiver(receiver, events, Context.RECEIVER_EXPORTED)

@@ -80,11 +80,12 @@
     <string name="bluetooth_connected">Connected to %1$s</string>
     <string name="bluetooth_connected_body">Pick the USB security key option in your browser.</string>
     <string name="bluetooth_connecting">Connecting to %1$s…</string>
-    <string name="bluetooth_connecting_body">Keep the computer nearby.</string>
+    <string name="bluetooth_connecting_body">Accept the request on the computer if it asks.</string>
     <string name="bluetooth_starting">Starting…</string>
     <string name="bluetooth_starting_body">Keep fidont open.</string>
     <string name="bluetooth_ready_body">Choose a paired computer, or pair a new one.</string>
-    <string name="bluetooth_pairing_body">Add %1$s in the Bluetooth settings of the computer, or choose the computer here when it shows.</string>
+    <string name="bluetooth_pairing_body">Choose the computer when it shows.</string>
+    <string name="bluetooth_none_body">No computer found. Make it visible in its Bluetooth settings, then try again.</string>
     <string name="bluetooth_nearby">Nearby computers</string>
     <string name="bluetooth_pair">Pair a computer</string>
     <string name="bluetooth_failed_body">Couldn\'t connect. Remove this phone on the computer, then pair it again.</string>

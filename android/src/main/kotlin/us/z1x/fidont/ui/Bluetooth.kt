@@ -41,9 +41,7 @@ import us.z1x.fidont.transport.hid.HidStatus
 import kotlin.time.Duration.Companion.seconds
 
 private val PERMISSIONS =
-    arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_ADVERTISE)
-
-private const val VISIBLE_SECONDS = 120
+    arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
 
 class Computer(
     val name: String,
@@ -63,7 +61,7 @@ sealed interface BluetoothState {
         val computers: List<Computer>,
         val nearby: List<Computer> = emptyList(),
         val searching: Boolean = false,
-        val visible: String? = null,
+        val searched: Boolean = false,
         val failed: Boolean = false,
     ) : BluetoothState
 
@@ -103,8 +101,7 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
             allowed = granted.values.all { it }
         }
-    val visible by key.visible.collectAsState()
-    val show = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
+    var searched by remember { mutableStateOf(false) }
 
     if (allowed) {
         LaunchedEffect(Unit) {
@@ -142,7 +139,7 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
                     computers = key.computers.map { Computer(it.name ?: it.address, it.address) },
                     nearby = nearby.map { Computer(it.name ?: it.address, it.address) },
                     searching = searching,
-                    visible = key.name.takeIf { visible },
+                    searched = searched,
                     failed = current.failed,
                 )
             }
@@ -153,14 +150,9 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
                 allow.launch(PERMISSIONS)
             }
 
-            // either side can then start the pairing
             BluetoothAction.Pair -> {
+                searched = true
                 key.search()
-                show.launch(
-                    Intent(
-                        BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE,
-                    ).putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, VISIBLE_SECONDS),
-                )
             }
 
             BluetoothAction.Disconnect -> {
@@ -318,7 +310,8 @@ private fun body(state: BluetoothState): String =
 
         is BluetoothState.Ready -> {
             when {
-                state.visible != null -> stringResource(R.string.bluetooth_pairing_body, state.visible)
+                state.searching || state.nearby.isNotEmpty() -> stringResource(R.string.bluetooth_pairing_body)
+                state.searched -> stringResource(R.string.bluetooth_none_body)
                 state.failed -> stringResource(R.string.bluetooth_failed_body)
                 else -> stringResource(R.string.bluetooth_ready_body)
             }
