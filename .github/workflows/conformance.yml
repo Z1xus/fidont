@@ -1,0 +1,23 @@
+name: CTAP2
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: ./gradlew :core:conformance

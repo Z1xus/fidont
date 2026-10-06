@@ -2,6 +2,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="https://www.shieldcn.dev/github/downloads/Z1xus/fidont.svg?variant=secondary&amp;size=xs&amp;mode=dark"><img alt="Total downloads" src="https://www.shieldcn.dev/github/downloads/Z1xus/fidont.svg?variant=secondary&amp;size=xs&amp;mode=light"></picture>
 <picture><source media="(prefers-color-scheme: dark)" srcset="https://www.shieldcn.dev/github/last-commit/Z1xus/fidont.svg?variant=secondary&amp;size=xs&amp;mode=dark"><img alt="Last commit" src="https://www.shieldcn.dev/github/last-commit/Z1xus/fidont.svg?variant=secondary&amp;size=xs&amp;mode=light"></picture>
+<a href="https://github.com/Z1xus/fidont/actions/workflows/conformance.yml"><picture><source media="(prefers-color-scheme: dark)" srcset="https://www.shieldcn.dev/github/ci/Z1xus/fidont.svg?workflow=conformance.yml&amp;branch=main&amp;label=CTAP2&amp;variant=secondary&amp;size=xs&amp;mode=dark"><img alt="CTAP2 tests" src="https://www.shieldcn.dev/github/ci/Z1xus/fidont.svg?workflow=conformance.yml&amp;branch=main&amp;label=CTAP2&amp;variant=secondary&amp;size=xs&amp;mode=light"></picture></a>
 
 Stop paying for YubiKeys, use your Android phone as a FIDO2/WebAuthn key instead.
 
@@ -122,6 +123,8 @@ docker run --rm -v "$PWD:/project" -w /project/firmware espressif/idf:v6.1 idf.p
 go build -C relay
 cargo build --release --manifest-path helper/Cargo.toml
 ```
+
+`./gradlew :core:conformance` runs the CTAP2 code against [python-fido2](https://github.com/Yubico/python-fido2), it needs [uv](https://docs.astral.sh/uv/).
 
 ## Credits
 
