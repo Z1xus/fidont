@@ -39,7 +39,7 @@ private const val OPTION = 0x6000812cL
 private const val FORCE_DOWNLOAD_BOOT = 1L
 
 private const val BLOCK = 0x400
-private const val FLASH_SIZE = 4 * 1024 * 1024
+const val FLASH_SIZE = 4 * 1024 * 1024
 private const val CHECKSUM_SEED = 0xef
 private const val MD5_SIZE = 32
 private const val TIMEOUT = 3000

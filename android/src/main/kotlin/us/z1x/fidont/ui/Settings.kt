@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import us.z1x.fidont.BuildConfig
 import us.z1x.fidont.Light
 import us.z1x.fidont.LightMode
@@ -73,6 +74,7 @@ fun Settings(
     val black by preferences.black.collectAsState()
     val dynamic by preferences.dynamic.collectAsState()
     val relay by preferences.relay.collectAsState()
+    val firmware by preferences.firmware.collectAsState()
     val light by preferences.light.collectAsState()
     val links by context.app.dongle.links
         .collectAsState()
@@ -88,6 +90,7 @@ fun Settings(
         black = black,
         dynamic = dynamic,
         relay = relay,
+        firmware = firmware,
         light = light.takeIf { dongle },
         version = BuildConfig.VERSION_NAME,
         commit = BuildConfig.COMMIT,
@@ -98,6 +101,7 @@ fun Settings(
         onBlack = preferences::setBlack,
         onDynamic = preferences::setDynamic,
         onRelay = preferences::setRelay,
+        onFirmware = preferences::setFirmware,
         onLight = preferences::setLight,
         onBack = onBack,
         onPrivacy = onPrivacy,
@@ -111,6 +115,7 @@ fun SettingsScreen(
     black: Boolean,
     dynamic: Boolean,
     relay: Int,
+    firmware: String,
     light: Light?,
     version: String,
     commit: String,
@@ -121,6 +126,7 @@ fun SettingsScreen(
     onBlack: (Boolean) -> Unit,
     onDynamic: (Boolean) -> Unit,
     onRelay: (Int) -> Unit,
+    onFirmware: (String) -> Unit,
     onLight: (Light) -> Unit,
     onBack: () -> Unit,
     onPrivacy: () -> Unit,
@@ -185,6 +191,8 @@ fun SettingsScreen(
         }
         item { SectionHeader(R.string.relay) }
         item { Relay(relay, onRelay) }
+        item { SectionHeader(R.string.firmware) }
+        item { Firmware(firmware, onFirmware) }
         item { SectionHeader(R.string.appearance) }
         item {
             GroupItem(0, 3) {
@@ -330,6 +338,36 @@ private fun Relay(
         }
         Text(
             stringResource(R.string.relay_body),
+            Modifier.padding(start = 32.dp, top = 8.dp, end = 32.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+@Composable
+private fun Firmware(
+    firmware: String,
+    onFirmware: (String) -> Unit,
+) {
+    var url by rememberSaveable { mutableStateOf(firmware) }
+    Column {
+        GroupItem(0, 1) {
+            OutlinedTextField(
+                value = url,
+                onValueChange = { text ->
+                    url = text.trim()
+                    if (url.isEmpty() || url.toHttpUrlOrNull() != null) onFirmware(url)
+                },
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 4.dp),
+                label = { Text(stringResource(R.string.firmware_url)) },
+                supportingText = { Text(stringResource(R.string.firmware_url_body)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                singleLine = true,
+            )
+        }
+        Text(
+            stringResource(R.string.firmware_body),
             Modifier.padding(start = 32.dp, top = 8.dp, end = 32.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,

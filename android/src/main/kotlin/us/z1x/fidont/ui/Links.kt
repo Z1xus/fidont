@@ -168,11 +168,14 @@ fun rememberLinks(): Links {
                     // an empty board restarts in a loop, and each start is a new device to Android
                     plugged(usb)?.let { device ->
                         scope.launch {
-                            failure = null
                             progress = 0f
-                            if (!usbPermission(context, usb, device) || !dongle.setUp(device) { progress = it }) {
-                                failure = DongleState.Failure.SetUp
-                            }
+                            failure =
+                                when {
+                                    dongle.firmware() == null -> DongleState.Failure.Download
+                                    !usbPermission(context, usb, device) -> DongleState.Failure.SetUp
+                                    !dongle.setUp(device) { progress = it } -> DongleState.Failure.SetUp
+                                    else -> null
+                                }
                             board = null
                             progress = null
                         }

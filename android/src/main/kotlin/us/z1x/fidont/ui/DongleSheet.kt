@@ -47,7 +47,7 @@ sealed interface DongleState {
         val progress: Float,
     ) : DongleState
 
-    enum class Failure { SetUp, Pair }
+    enum class Failure { Download, SetUp, Pair }
 }
 
 enum class DongleAction { SetUp, Pair, Cancel, Allow, Forget }
@@ -155,6 +155,7 @@ private fun title(state: DongleState): Int =
     when (state) {
         is DongleState.Unpaired -> {
             when {
+                state.failure == DongleState.Failure.Download -> R.string.dongle_download_failed
                 state.failure == DongleState.Failure.SetUp -> R.string.dongle_failed
                 state.failure == DongleState.Failure.Pair -> R.string.dongle_pair_failed
                 state.board -> R.string.dongle_found
@@ -191,6 +192,7 @@ private fun body(state: DongleState): Int =
     when (state) {
         is DongleState.Unpaired -> {
             when {
+                state.failure == DongleState.Failure.Download -> R.string.dongle_download_failed_body
                 state.failure == DongleState.Failure.SetUp -> R.string.dongle_failed_body
                 state.failure == DongleState.Failure.Pair -> R.string.dongle_pair_failed_body
                 state.board -> R.string.dongle_found_body

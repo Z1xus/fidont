@@ -42,6 +42,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import us.z1x.fidont.BuildConfig
 import us.z1x.fidont.Light
 import us.z1x.fidont.app
 import us.z1x.fidont.dongle.CANCEL
@@ -68,7 +71,9 @@ import us.z1x.fidont.dongle.pairingCode
 import us.z1x.fidont.ecdh
 import us.z1x.fidont.ecdhGenerate
 import us.z1x.fidont.random
+import java.io.File
 import java.io.IOException
+import java.security.MessageDigest
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.math.min
@@ -81,6 +86,7 @@ private val TX = UUID.fromString("f1d0a002-6a0b-4d1e-9f5c-3c1e5d0a7e11")
 private val NOTIFICATIONS = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
 private const val FIRMWARE = "firmware.bin"
+private const val RELEASE = "https://github.com/Z1xus/fidont/releases/download/v${BuildConfig.VERSION_NAME}/$FIRMWARE"
 private const val SECRET = "secret"
 private const val COMPUTERS = "computers"
 private const val ASKED = "asked"
@@ -131,13 +137,28 @@ class Dongle(
     val status = MutableStateFlow(emptyMap<String, Status>())
     val pending = MutableStateFlow(0)
 
+    // the build pins the hash, so the file can come from any source
+    suspend fun firmware(): ByteArray? =
+        withContext(Dispatchers.IO) {
+            val file = File(context.getExternalFilesDir(null) ?: context.filesDir, FIRMWARE)
+            if (file.exists()) file.readBytes().takeIf(::pinned)?.let { return@withContext it }
+            try {
+                val url = context.app.preferences.firmware.value
+                val request = Request.Builder().url(url.ifEmpty { RELEASE }).build()
+                val image = OkHttpClient().newCall(request).execute().use { it.body.byteStream().readNBytes(FLASH_SIZE) }
+                image.takeIf(::pinned)?.also(file::writeBytes)
+            } catch (_: IOException) {
+                null
+            }
+        }
+
     suspend fun setUp(
         device: UsbDevice,
         progress: (Float) -> Unit,
     ): Boolean =
         withContext(Dispatchers.IO) {
             val secret = random(SECRET_SIZE)
-            val image = context.assets.open(FIRMWARE).use { it.readBytes() }
+            val image = firmware() ?: return@withContext false
             linkPartition(secret).copyInto(image, LINK_OFFSET)
             val serial = UsbSerial.open(context.getSystemService(UsbManager::class.java), device) ?: return@withContext false
             try {
@@ -283,6 +304,8 @@ class Dongle(
         links.value = value
     }
 
+    private fun pinned(image: ByteArray) = MessageDigest.getInstance("SHA-256").digest(image).toHexString() == BuildConfig.FIRMWARE
+
     private fun filter(id: ByteArray) = ScanFilter.Builder().setServiceData(ParcelUuid(SERVICE), id).build()
 
     @SuppressLint("MissingPermission")
@@ -387,7 +410,7 @@ class Dongle(
         id: String,
         build: ByteArray,
     ) {
-        val image = context.assets.open(FIRMWARE).use { it.readBytes() }
+        val image = firmware() ?: return
         if (image.copyOfRange(APP_OFFSET + BUILD_OFFSET, APP_OFFSET + BUILD_OFFSET + BUILD_SIZE).contentEquals(build)) return
         val size = image.size - APP_OFFSET
         gatt.send { frame(link.encrypt(UPDATE_BEGIN, ByteArray(0))) }

@@ -54,10 +54,12 @@
     <string name="dongle_none">Not set up</string>
     <string name="dongle_none_body">Plug an ESP32-S3 board into this phone to make a USB security key. If it doesn\'t show, hold BOOT while you plug it in.</string>
     <string name="dongle_found">Board found</string>
-    <string name="dongle_found_body">Ready to set up as your dongle.</string>
+    <string name="dongle_found_body">Ready to set up as your dongle. fidont downloads the firmware first.</string>
     <string name="dongle_set_up">Set up</string>
     <string name="dongle_setting_up">Setting up…</string>
     <string name="dongle_setting_up_body">Keep the board plugged in.</string>
+    <string name="dongle_download_failed">Couldn\'t download firmware</string>
+    <string name="dongle_download_failed_body">Check your internet connection, then try again.</string>
     <string name="dongle_failed">Couldn\'t set up</string>
     <string name="dongle_failed_body">Hold BOOT while you plug in the board, then try again.</string>
     <string name="dongle_pair">Pair over Bluetooth</string>
@@ -167,6 +169,10 @@
     <string name="relay_google_body">Covered by Google\'s privacy policy.</string>
     <string name="relay_custom_body">A relay you run yourself.</string>
     <string name="relay_body">A relay sees your IP address and when you connect. It can\'t read your messages.</string>
+    <string name="firmware">Dongle firmware</string>
+    <string name="firmware_url">Download URL</string>
+    <string name="firmware_url_body">Leave empty to use GitHub</string>
+    <string name="firmware_body">fidont downloads this to set up or update your dongle. The file must match this version of the app.</string>
     <string name="relay_id">Relay ID</string>
     <string name="relay_id_body">A number from 256 to 65535</string>
     <string name="fun">Fun stuff</string>
@@ -200,7 +206,7 @@
     <string name="privacy_storage">Data storage</string>
     <string name="privacy_storage_body">Passkeys and their account names are stored only on this phone. The keys stay in its secure hardware. If you turn on backup, the phone also keeps an encrypted copy of each new key, and only you can export it to a file. Nothing is uploaded or synced.</string>
     <string name="privacy_network">Internet use</string>
-    <string name="privacy_network_body">fidont uses the internet only when you scan a QR code. Your phone and the other device then connect through a relay. Messages are end-to-end encrypted, so a relay can\'t read them. It can see your IP address and the time of the connection. The default relay is cable.ahhkeysummo2d.com, operated by z1xus and served through Cloudflare, and it keeps no logs. You can choose Google\'s relay or your own in Settings.</string>
+    <string name="privacy_network_body">fidont uses the internet to download dongle firmware from GitHub, and when you scan a QR code. Your phone and the other device then connect through a relay. Messages are end-to-end encrypted, so a relay can\'t read them. It can see your IP address and the time of the connection. The default relay is cable.ahhkeysummo2d.com, operated by z1xus and served through Cloudflare, and it keeps no logs. You can choose Google\'s relay or your own in Settings.</string>
     <string name="privacy_dongle">Dongle</string>
     <string name="privacy_dongle_body">The dongle stores no passkeys. It forwards requests from the computer to this phone over an encrypted Bluetooth link.</string>
     <string name="privacy_permissions">Permissions</string>

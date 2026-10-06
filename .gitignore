@@ -5,4 +5,3 @@ local.properties
 /firmware/sdkconfig
 /helper/target/
 /firmware/managed_components/
-/android/src/main/assets/firmware.bin

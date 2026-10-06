@@ -17,6 +17,7 @@ android {
         versionCode = 18
         versionName = "0.1.17"
         buildConfigField("String", "COMMIT", "\"${commit.get().trim()}\"")
+        buildConfigField("String", "FIRMWARE", "\"${file("../firmware/sha256").readText().substringBefore(' ')}\"")
     }
 
     buildTypes {
