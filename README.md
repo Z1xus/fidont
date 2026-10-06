@@ -36,7 +36,7 @@ Plug the board into the phone and tap "Set up", the app flashes and pairs it in 
 And if the board isn't found, hold BOOT while plugging it in.
 
 The app downloads the firmware from the GitHub release.  
-You can host `firmware.bin` yourself too, the URL goes in settings under "Dongle firmware".
+You can host `firmware.bin` and `firmware.bin.sig` yourself too, the URL goes in settings under "Dongle firmware".
 
 If flashing from the phone doesn't work, use the [web flasher](https://z1xus.github.io/fidont/) and then "Pair over Bluetooth" in the app.
 
@@ -117,14 +117,11 @@ Then pick Custom under QR code relay in settings and enter your ID.
 Needs JDK 17+, the Android SDK, Go, Docker and Rust (the helper also wants the D-Bus headers).
 
 ```sh
-docker run --rm -v "$PWD:/project" -w /project/firmware \
-    espressif/idf:v6.1@sha256:81893c71bb5e570088901f21def8684c25cd2a9020281bd01b843a7655edb18c idf.py build
+docker run --rm -v "$PWD:/project" -w /project/firmware espressif/idf:v6.1 idf.py build
 ./gradlew :android:assembleDebug
 go build -C relay
 cargo build --release --manifest-path helper/Cargo.toml
 ```
-
-The firmware build updates `firmware/sha256`, commit it with your firmware changes.
 
 ## Credits
 

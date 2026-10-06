@@ -27,6 +27,7 @@ import android.graphics.Color
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.ParcelUuid
+import android.util.Base64
 import androidx.core.content.edit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -73,7 +74,10 @@ import us.z1x.fidont.ecdhGenerate
 import us.z1x.fidont.random
 import java.io.File
 import java.io.IOException
-import java.security.MessageDigest
+import java.security.KeyFactory
+import java.security.Signature
+import java.security.SignatureException
+import java.security.spec.X509EncodedKeySpec
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.math.min
@@ -87,6 +91,10 @@ private val NOTIFICATIONS = UUID.fromString("00002902-0000-1000-8000-00805f9b34f
 
 private const val FIRMWARE = "firmware.bin"
 private const val RELEASE = "https://github.com/Z1xus/fidont/releases/download/v${BuildConfig.VERSION_NAME}/$FIRMWARE"
+
+// the public half of the key that signs the firmware of a release
+private const val KEY =
+    "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEMWl4HXadTlTux3LzNW81FOdvNT3Ae/Y+pah5KRSIuMhRD+SG1V4U+9MBHxnk1buDaStY3O58m3fWaxBO7J6gaw=="
 private const val SECRET = "secret"
 private const val COMPUTERS = "computers"
 private const val ASKED = "asked"
@@ -137,16 +145,28 @@ class Dongle(
     val status = MutableStateFlow(emptyMap<String, Status>())
     val pending = MutableStateFlow(0)
 
-    // the build pins the hash, so the file can come from any source
+    // the signature makes the source of the files not matter
     suspend fun firmware(): ByteArray? =
         withContext(Dispatchers.IO) {
-            val file = File(context.getExternalFilesDir(null) ?: context.filesDir, FIRMWARE)
-            if (file.exists()) file.readBytes().takeIf(::pinned)?.let { return@withContext it }
+            val folder = context.getExternalFilesDir(null) ?: context.filesDir
+            val files = listOf(File(folder, FIRMWARE), File(folder, "$FIRMWARE.sig"))
+            if (files.all(File::exists)) {
+                val (image, signature) = files.map(File::readBytes)
+                if (signed(image, signature)) return@withContext image
+            }
             try {
-                val url = context.app.preferences.firmware.value
-                val request = Request.Builder().url(url.ifEmpty { RELEASE }).build()
-                val image = OkHttpClient().newCall(request).execute().use { it.body.byteStream().readNBytes(FLASH_SIZE) }
-                image.takeIf(::pinned)?.also(file::writeBytes)
+                val custom = context.app.preferences.firmware.value
+                val url = custom.ifEmpty { RELEASE }
+                val client = OkHttpClient()
+                val (image, signature) =
+                    listOf(url, "$url.sig").map {
+                        val request = Request.Builder().url(it).build()
+                        client.newCall(request).execute().use { response -> response.body.byteStream().readNBytes(FLASH_SIZE) }
+                    }
+                if (!signed(image, signature)) return@withContext null
+                files[0].writeBytes(image)
+                files[1].writeBytes(signature)
+                image
             } catch (_: IOException) {
                 null
             }
@@ -304,7 +324,22 @@ class Dongle(
         links.value = value
     }
 
-    private fun pinned(image: ByteArray) = MessageDigest.getInstance("SHA-256").digest(image).toHexString() == BuildConfig.FIRMWARE
+    // the version is part of what is signed, so the firmware of another release fails
+    private fun signed(
+        image: ByteArray,
+        signature: ByteArray,
+    ): Boolean {
+        val key = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(Base64.decode(KEY, Base64.DEFAULT)))
+        val check = Signature.getInstance("SHA256withECDSA")
+        check.initVerify(key)
+        check.update(image)
+        check.update(BuildConfig.VERSION_NAME.toByteArray())
+        return try {
+            check.verify(signature)
+        } catch (_: SignatureException) {
+            false
+        }
+    }
 
     private fun filter(id: ByteArray) = ScanFilter.Builder().setServiceData(ParcelUuid(SERVICE), id).build()
 
