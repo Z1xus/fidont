@@ -17,11 +17,16 @@ jobs:
           persist-credentials: false
       - name: Firmware
         run: |
-          docker run --rm -v "$PWD:/project" -w /project/firmware \
-            espressif/idf:v6.1@sha256:81893c71bb5e570088901f21def8684c25cd2a9020281bd01b843a7655edb18c idf.py build
-          git diff --exit-code firmware/sha256
           mkdir dist
-          cp firmware/build/merged-binary.bin dist/firmware.bin
+          docker run --rm -v "$PWD:/project" -w /project/firmware espressif/idf:v6.1 \
+            idf.py build merge-bin -o ../../dist/firmware.bin
+      - name: Sign firmware
+        env:
+          FIRMWARE_KEY: ${{ secrets.FIRMWARE_KEY }}
+        run: |
+          echo "$FIRMWARE_KEY" > "$RUNNER_TEMP/firmware.pem"
+          { cat dist/firmware.bin; printf %s "${GITHUB_REF_NAME#v}"; } |
+            openssl dgst -sha256 -sign "$RUNNER_TEMP/firmware.pem" -out dist/firmware.bin.sig
       - uses: actions/setup-java@v6.0.1
         with:
           distribution: temurin
