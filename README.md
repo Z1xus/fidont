@@ -5,6 +5,8 @@
 
 Stop paying for YubiKeys, use your Android phone as a FIDO2/WebAuthn key instead.
 
+<img alt="Mockup" src="https://github.com/user-attachments/assets/4061f2ad-88f4-4ce8-b058-acfa9d951943">
+
 It works as:
 
 - a passkey provider for apps and sites on the phone itself
