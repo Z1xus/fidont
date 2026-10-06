@@ -16,6 +16,9 @@ kotlin {
         commonMain.dependencies {
             api(libs.sqldelight.runtime)
         }
+        jvmTest.dependencies {
+            implementation(libs.sqldelight.sqlite)
+        }
     }
 }
 
@@ -25,4 +28,11 @@ sqldelight {
             packageName = "us.z1x.fidont.store"
         }
     }
+}
+
+tasks.register<Exec>("conformance") {
+    val classpath = kotlin.jvm().compilations["test"].run { output.allOutputs + runtimeDependencyFiles }
+    inputs.files(classpath)
+    environment("CLASSPATH", classpath.asPath)
+    commandLine("uv", "run", "conformance.py")
 }
