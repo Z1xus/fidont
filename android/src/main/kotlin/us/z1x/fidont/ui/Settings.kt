@@ -1,7 +1,10 @@
 package us.z1x.fidont.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -20,11 +24,13 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -41,6 +47,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import us.z1x.fidont.BuildConfig
+import us.z1x.fidont.BackgroundBluetoothMode
 import us.z1x.fidont.Light
 import us.z1x.fidont.LightMode
 import us.z1x.fidont.R
@@ -50,6 +57,7 @@ import us.z1x.fidont.hybrid.CUSTOM_RELAYS
 import us.z1x.fidont.hybrid.FIDONT_RELAY
 import us.z1x.fidont.hybrid.GOOGLE_RELAY
 import us.z1x.fidont.hybrid.relayDomain
+import us.z1x.fidont.transport.hid.BluetoothService
 
 const val AUTHOR = "https://z1x.us"
 private const val REPOSITORY = "https://github.com/Z1xus/fidont"
@@ -76,14 +84,63 @@ fun Settings(
     val relay by preferences.relay.collectAsState()
     val firmware by preferences.firmware.collectAsState()
     val light by preferences.light.collectAsState()
+    val backgroundBluetooth by preferences.backgroundBluetooth.collectAsState()
     val links by context.app.dongle.links
         .collectAsState()
     val strongBox = context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
     val dongle = links.any { it.computer == null }
+    var requestedMode by rememberSaveable { mutableStateOf<BackgroundBluetoothMode?>(null) }
+    var choosingComputer by remember { mutableStateOf<List<Computer>?>(null) }
+    var associationFailed by rememberSaveable { mutableStateOf(false) }
+
+    fun associate(computer: Computer) {
+        choosingComputer = null
+        context.app.bluetoothCompanion.associate(context as Activity, computer.address) { associationFailed = true }
+    }
+
+    fun applyMode(mode: BackgroundBluetoothMode) {
+        when (mode) {
+            BackgroundBluetoothMode.Off -> {
+                BluetoothService.disable(context)
+                context.app.bluetoothCompanion.disable()
+            }
+
+            BackgroundBluetoothMode.Always -> BluetoothService.enable(context)
+            BackgroundBluetoothMode.Companion -> {
+                val computers = context.app.hid.computers.map { Computer(it.name ?: it.address, it.address) }
+                if (computers.size == 1) associate(computers.single()) else choosingComputer = computers
+            }
+        }
+    }
+
+    val backgroundPermissions =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            val allowed =
+                context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
+                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            if (allowed) requestedMode?.let(::applyMode)
+            requestedMode = null
+        }
+
+    fun selectMode(mode: BackgroundBluetoothMode) {
+        if (mode == backgroundBluetooth) return
+        if (mode == BackgroundBluetoothMode.Off) return applyMode(mode)
+        val permissions = arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.POST_NOTIFICATIONS)
+        if (permissions.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }) {
+            applyMode(mode)
+        } else {
+            requestedMode = mode
+            backgroundPermissions.launch(permissions)
+        }
+    }
     // the home screen stops its link when this screen opens, and the light needs one
     if (dongle && context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
         val lifecycle = LocalLifecycleOwner.current
         LaunchedEffect(Unit) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { context.app.dongle.serve() } }
+    }
+    if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+        val lifecycle = LocalLifecycleOwner.current
+        LaunchedEffect(Unit) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { context.app.hid.serve() } }
     }
     SettingsScreen(
         theme = theme,
@@ -92,6 +149,7 @@ fun Settings(
         relay = relay,
         firmware = firmware,
         light = light.takeIf { dongle },
+        backgroundBluetooth = backgroundBluetooth,
         version = BuildConfig.VERSION_NAME,
         commit = BuildConfig.COMMIT,
         strongBox = strongBox,
@@ -103,10 +161,40 @@ fun Settings(
         onRelay = preferences::setRelay,
         onFirmware = preferences::setFirmware,
         onLight = preferences::setLight,
+        onBackgroundBluetooth = ::selectMode,
         onBack = onBack,
         onPrivacy = onPrivacy,
         onLicenses = onLicenses,
     )
+
+    choosingComputer?.let { computers ->
+        AlertDialog(
+            onDismissRequest = { choosingComputer = null },
+            title = { Text(stringResource(if (computers.isEmpty()) R.string.background_bluetooth_no_computer else R.string.background_bluetooth_choose)) },
+            text = {
+                if (computers.isEmpty()) {
+                    Text(stringResource(R.string.background_bluetooth_no_computer_body))
+                } else {
+                    Column { computers.forEach { computer -> TextButton({ associate(computer) }) { Text(computer.name) } } }
+                }
+            },
+            confirmButton = {
+                if (computers.isEmpty()) TextButton({ choosingComputer = null }) { Text(stringResource(R.string.ok)) }
+            },
+            dismissButton = {
+                if (computers.isNotEmpty()) TextButton({ choosingComputer = null }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
+
+    if (associationFailed) {
+        AlertDialog(
+            onDismissRequest = { associationFailed = false },
+            title = { Text(stringResource(R.string.background_bluetooth_failed)) },
+            text = { Text(stringResource(R.string.background_bluetooth_failed_body)) },
+            confirmButton = { TextButton({ associationFailed = false }) { Text(stringResource(R.string.ok)) } },
+        )
+    }
 }
 
 @Composable
@@ -117,6 +205,7 @@ fun SettingsScreen(
     relay: Int,
     firmware: String,
     light: Light?,
+    backgroundBluetooth: BackgroundBluetoothMode,
     version: String,
     commit: String,
     strongBox: Boolean,
@@ -128,6 +217,7 @@ fun SettingsScreen(
     onRelay: (Int) -> Unit,
     onFirmware: (String) -> Unit,
     onLight: (Light) -> Unit,
+    onBackgroundBluetooth: (BackgroundBluetoothMode) -> Unit,
     onBack: () -> Unit,
     onPrivacy: () -> Unit,
     onLicenses: () -> Unit,
@@ -191,6 +281,29 @@ fun SettingsScreen(
         }
         item { SectionHeader(R.string.relay) }
         item { Relay(relay, onRelay) }
+        item { SectionHeader(R.string.bluetooth) }
+        val backgroundModes =
+            listOf(
+                Triple(BackgroundBluetoothMode.Off, R.string.background_bluetooth_off, R.string.background_bluetooth_off_body),
+                Triple(
+                    BackgroundBluetoothMode.Companion,
+                    R.string.background_bluetooth_companion,
+                    R.string.background_bluetooth_companion_body,
+                ),
+                Triple(BackgroundBluetoothMode.Always, R.string.background_bluetooth_always, R.string.background_bluetooth_always_body),
+            )
+        backgroundModes.forEachIndexed { index, (mode, title, body) ->
+            item {
+                Entry(
+                    index,
+                    backgroundModes.size,
+                    stringResource(title),
+                    supporting = stringResource(body),
+                    trailing = { RadioButton(backgroundBluetooth == mode, onClick = null) },
+                    onClick = { onBackgroundBluetooth(mode) },
+                )
+            }
+        }
         item { SectionHeader(R.string.firmware) }
         item { Firmware(firmware, onFirmware) }
         item { SectionHeader(R.string.appearance) }

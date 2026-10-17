@@ -13,11 +13,16 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import androidx.core.content.edit
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import us.z1x.fidont.app
 import kotlin.time.Duration.Companion.seconds
@@ -59,6 +64,10 @@ class HidKey(
     private val adapter = context.getSystemService(BluetoothManager::class.java).adapter
     private var hid: BluetoothHidDevice? = null
     private var host: BluetoothDevice? = null
+    private val serving = Mutex()
+    private val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var owners = 0
+    private var server: Job? = null
     val status = MutableStateFlow<HidStatus>(HidStatus.Starting)
     val nearby = MutableStateFlow(emptyList<BluetoothDevice>())
     val searching = MutableStateFlow(false)
@@ -90,8 +99,27 @@ class HidKey(
         host?.let { hid?.disconnect(it) }
     }
 
-    // Android only keeps the key registered while the app is in front
-    suspend fun serve() {
+    // Activity, foreground-service, and companion-service lifetimes can overlap. Keep one HID
+    // registration until the last owner leaves so a lifecycle handoff cannot disconnect the host.
+    suspend fun serve(): Nothing {
+        serving.withLock {
+            owners++
+            if (server?.isActive != true) server = serverScope.launch { runServer() }
+        }
+        try {
+            awaitCancellation()
+        } finally {
+            serving.withLock {
+                owners--
+                if (owners == 0) {
+                    server?.cancel()
+                    server = null
+                }
+            }
+        }
+    }
+
+    private suspend fun runServer() {
         if (adapter?.isEnabled != true) {
             status.value = HidStatus.Off
             return

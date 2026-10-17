@@ -98,6 +98,7 @@ private const val KEY =
 private const val SECRET = "secret"
 private const val COMPUTERS = "computers"
 private const val ASKED = "asked"
+private const val ASSOCIATION = "association"
 private const val MTU = 517
 private const val DEFAULT_MTU = 23
 private const val ATT_HEADER = 3
@@ -270,14 +271,25 @@ class Dongle(
     fun forget(id: String) {
         save(links.value.filter { it.id != id })
         if (links.value.isEmpty()) {
-            companions?.myAssociations?.forEach { companions.disassociate(it.id) }
-            preferences.edit { remove(ASKED) }
+            val association = preferences.getInt(ASSOCIATION, -1)
+            if (association >= 0) companions?.disassociate(association)
+            preferences.edit {
+                remove(ASKED)
+                remove(ASSOCIATION)
+            }
         }
     }
 
     // Android lets an app with an associated device show the prompt while the app is closed
     private suspend fun associate(id: ByteArray) {
-        if (companions == null || companions.myAssociations.isNotEmpty() || preferences.getBoolean(ASKED, false)) return
+        if (companions == null) return
+        val background = context.app.preferences.backgroundBluetoothAssociation.value
+        val existing = companions.myAssociations.firstOrNull { it.id != background }
+        if (existing != null) {
+            preferences.edit { putInt(ASSOCIATION, existing.id) }
+            return
+        }
+        if (preferences.getBoolean(ASKED, false)) return
         preferences.edit { putBoolean(ASKED, true) }
         val device = BluetoothLeDeviceFilter.Builder().setScanFilter(filter(id)).build()
         val request =
@@ -296,7 +308,10 @@ class Dongle(
                     override fun onAssociationPending(sender: IntentSender) =
                         context.startIntentSender(sender, null, 0, 0, 0, foreground.toBundle())
 
-                    override fun onAssociationCreated(association: AssociationInfo) = continuation.resume(Unit)
+                    override fun onAssociationCreated(association: AssociationInfo) {
+                        preferences.edit { putInt(ASSOCIATION, association.id) }
+                        continuation.resume(Unit)
+                    }
 
                     override fun onFailure(error: CharSequence?) = continuation.resume(Unit)
                 }

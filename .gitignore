@@ -2,6 +2,9 @@
 .kotlin/
 build/
 local.properties
+keystore.properties
+*.jks
+*.keystore
 /firmware/sdkconfig
 /helper/target/
 /firmware/managed_components/

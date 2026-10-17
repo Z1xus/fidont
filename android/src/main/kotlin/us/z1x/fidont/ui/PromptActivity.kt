@@ -2,6 +2,10 @@ package us.z1x.fidont.ui
 
 import android.content.Context
 import android.content.Intent
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import android.hardware.biometrics.BiometricPrompt
@@ -26,6 +30,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import us.z1x.fidont.R
+import us.z1x.fidont.app
 import us.z1x.fidont.store.Credential
 import java.security.Signature
 import javax.crypto.Cipher
@@ -43,6 +48,9 @@ private sealed class Request {
         val credentials: List<Credential>,
     ) : Request()
 }
+
+private const val REQUEST_CHANNEL = "requests"
+private const val REQUEST_NOTIFICATION = 3
 
 class PromptActivity : ComponentActivity() {
     private val cancellation = CancellationSignal()
@@ -151,13 +159,47 @@ class PromptActivity : ComponentActivity() {
         ): Any? =
             mutex.withLock {
                 this.request = request
-                context.startActivity(Intent(context, PromptActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                if (context.app.isVisible) {
+                    context.startActivity(Intent(context, PromptActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } else {
+                    notify(context)
+                }
                 try {
                     request.result.await()
                 } finally {
+                    context.getSystemService(NotificationManager::class.java).cancel(REQUEST_NOTIFICATION)
                     request.result.cancel()
                     this.request = null
                 }
             }
+
+        private fun notify(context: Context) {
+            val manager = context.getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    REQUEST_CHANNEL,
+                    context.getString(R.string.request_channel),
+                    NotificationManager.IMPORTANCE_HIGH,
+                ),
+            )
+            val open =
+                PendingIntent.getActivity(
+                    context,
+                    REQUEST_NOTIFICATION,
+                    Intent(context, PromptActivity::class.java),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+            val notification =
+                Notification
+                    .Builder(context, REQUEST_CHANNEL)
+                    .setSmallIcon(R.drawable.ic_key)
+                    .setContentTitle(context.getString(R.string.request_title))
+                    .setContentText(context.getString(R.string.request_body))
+                    .setContentIntent(open)
+                    .setAutoCancel(true)
+                    .setCategory(Notification.CATEGORY_EVENT)
+                    .build()
+            manager.notify(REQUEST_NOTIFICATION, notification)
+        }
     }
 }

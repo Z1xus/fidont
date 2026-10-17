@@ -36,6 +36,7 @@
     <string name="delete_title">Delete passkey for %1$s?</string>
     <string name="delete_body">You can\'t undo this.</string>
     <string name="cancel">Cancel</string>
+    <string name="ok">OK</string>
 
     <string name="scan">Scan QR code</string>
     <string name="scan_hint">Scan the QR code on your computer</string>
@@ -115,6 +116,21 @@
     <string name="bluetooth_off_body">Turn it on to use this.</string>
     <string name="bluetooth_unsupported">Not supported</string>
     <string name="bluetooth_unsupported_body">This phone doesn\'t let apps act as a Bluetooth device.</string>
+    <string name="background_bluetooth_off">Only while open</string>
+    <string name="background_bluetooth_off_body">Stops Bluetooth when fidont is closed.</string>
+    <string name="background_bluetooth_companion">Companion computer</string>
+    <string name="background_bluetooth_companion_body">Android wakes fidont for one associated computer. Uses less battery and has no permanent notification.</string>
+    <string name="background_bluetooth_always">Always available</string>
+    <string name="background_bluetooth_always_body">Listens for every paired computer. Most reliable, but shows a permanent notification and may use more battery.</string>
+    <string name="background_bluetooth_choose">Choose a companion computer</string>
+    <string name="background_bluetooth_no_computer">No paired computer</string>
+    <string name="background_bluetooth_no_computer_body">Pair a computer with the Bluetooth key first, then choose this option.</string>
+    <string name="background_bluetooth_failed">Couldn\'t associate the computer</string>
+    <string name="background_bluetooth_failed_body">Make sure the computer is nearby and Bluetooth is on, then try again.</string>
+    <string name="background_bluetooth_channel">Background Bluetooth key</string>
+    <string name="background_bluetooth_notification">Bluetooth key is available</string>
+    <string name="background_bluetooth_notification_body">Listening for requests from paired computers</string>
+    <string name="turn_off">Turn off</string>
 
     <string name="settings">Settings</string>
     <string name="security">Security</string>
