@@ -1,5 +1,6 @@
 package us.z1x.fidont.ui
 
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
@@ -125,8 +126,11 @@ fun OnboardingScreen(
                                     style = MaterialTheme.typography.headlineMedium,
                                 )
                             }
-                            Step(R.drawable.ic_lock, R.string.lock_title, R.string.lock_body, secure, 0, 2, onLock)
-                            Step(R.drawable.ic_shield, R.string.provider_title, R.string.provider_body, provider, 1, 2, onProvider)
+                            val count = if (Build.VERSION.SDK_INT >= 34) 2 else 1
+                            Step(R.drawable.ic_lock, R.string.lock_title, R.string.lock_body, secure, 0, count, onLock)
+                            if (Build.VERSION.SDK_INT >= 34) {
+                                Step(R.drawable.ic_shield, R.string.provider_title, R.string.provider_body, provider, 1, count, onProvider)
+                            }
                         }
                     }
                 }

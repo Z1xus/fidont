@@ -10,6 +10,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import us.z1x.fidont.R
 import us.z1x.fidont.ui.MainActivity
 
@@ -22,10 +23,11 @@ class RequestReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        val associated = context.getSystemService(CompanionDeviceManager::class.java)?.myAssociations.orEmpty()
-        if (associated.isNotEmpty()) {
+        val companions = context.getSystemService(CompanionDeviceManager::class.java)
+        val associated = if (Build.VERSION.SDK_INT >= 33) companions?.myAssociations?.isNotEmpty() else companions?.associations?.isNotEmpty()
+        if (associated == true) {
             context.startForegroundService(Intent(context, LinkService::class.java))
-        } else if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+        } else if (Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
             context.getSystemService(NotificationManager::class.java).notify(REQUEST_NOTIFICATION, requestNotification(context))
         }
     }

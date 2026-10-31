@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -20,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -121,7 +123,7 @@ fun rememberLinks(): Links {
     }
     // the notice is how a request reaches the phone while the app is closed
     LaunchedEffect(links.isEmpty()) {
-        if (links.isNotEmpty()) notify.launch(Manifest.permission.POST_NOTIFICATIONS)
+        if (Build.VERSION.SDK_INT >= 33 && links.isNotEmpty()) notify.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     val state =
@@ -248,7 +250,7 @@ private suspend fun usbPermission(
                     continuation.resume(usb.hasPermission(device))
                 }
             }
-        context.registerReceiver(receiver, IntentFilter(action), Context.RECEIVER_NOT_EXPORTED)
+        ContextCompat.registerReceiver(context, receiver, IntentFilter(action), ContextCompat.RECEIVER_NOT_EXPORTED)
         val intent = Intent(action).setPackage(context.packageName)
         usb.requestPermission(device, PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_MUTABLE))
         continuation.invokeOnCancellation { context.unregisterReceiver(receiver) }

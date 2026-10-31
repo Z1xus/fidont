@@ -2,6 +2,7 @@ package us.z1x.fidont.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -138,15 +139,17 @@ fun SettingsScreen(
         item { SectionHeader(R.string.security) }
         item {
             val storage = if (strongBox) R.string.storage_strongbox else R.string.storage_tee
-            Step(R.drawable.ic_key, R.string.storage, storage, true, 0, 3, {})
+            Step(R.drawable.ic_key, R.string.storage, storage, true, 0, if (Build.VERSION.SDK_INT >= 34) 3 else 2, {})
         }
         item {
             val state = if (setup.secure) R.string.on else R.string.screen_lock_off
-            Step(R.drawable.ic_lock, R.string.screen_lock, state, setup.secure, 1, 3, setup.onLock)
+            Step(R.drawable.ic_lock, R.string.screen_lock, state, setup.secure, 1, if (Build.VERSION.SDK_INT >= 34) 3 else 2, setup.onLock)
         }
-        item {
-            val state = if (setup.provider) R.string.on else R.string.off
-            Step(R.drawable.ic_shield, R.string.provider, state, setup.provider, 2, 3, setup.onProvider)
+        if (Build.VERSION.SDK_INT >= 34) {
+            item {
+                val state = if (setup.provider) R.string.on else R.string.off
+                Step(R.drawable.ic_shield, R.string.provider, state, setup.provider, 2, 3, setup.onProvider)
+            }
         }
         item { SectionHeader(R.string.backup) }
         item {

@@ -26,6 +26,7 @@ import android.content.IntentSender
 import android.graphics.Color
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.os.Build
 import android.os.ParcelUuid
 import android.util.Base64
 import androidx.core.content.edit
@@ -161,7 +162,11 @@ class Dongle(
                 val (image, signature) =
                     listOf(url, "$url.sig").map {
                         val request = Request.Builder().url(it).build()
-                        client.newCall(request).execute().use { response -> response.body.byteStream().readNBytes(FLASH_SIZE) }
+                        client.newCall(request).execute().use { response ->
+                            val source = response.body.source()
+                            source.request(FLASH_SIZE.toLong())
+                            source.readByteArray(minOf(source.buffer.size, FLASH_SIZE.toLong()))
+                        }
                     }
                 if (!signed(image, signature)) return@withContext null
                 files[0].writeBytes(image)
@@ -270,14 +275,20 @@ class Dongle(
     fun forget(id: String) {
         save(links.value.filter { it.id != id })
         if (links.value.isEmpty()) {
-            companions?.myAssociations?.forEach { companions.disassociate(it.id) }
+            if (Build.VERSION.SDK_INT >= 33) {
+                companions?.myAssociations?.forEach { companions.disassociate(it.id) }
+            } else {
+                companions?.associations?.forEach { companions.disassociate(it) }
+            }
             preferences.edit { remove(ASKED) }
         }
     }
 
     // Android lets an app with an associated device show the prompt while the app is closed
     private suspend fun associate(id: ByteArray) {
-        if (companions == null || companions.myAssociations.isNotEmpty() || preferences.getBoolean(ASKED, false)) return
+        if (companions == null || preferences.getBoolean(ASKED, false)) return
+        val associated = if (Build.VERSION.SDK_INT >= 33) companions.myAssociations.isNotEmpty() else companions.associations.isNotEmpty()
+        if (associated) return
         preferences.edit { putBoolean(ASKED, true) }
         val device = BluetoothLeDeviceFilter.Builder().setScanFilter(filter(id)).build()
         val request =
@@ -286,21 +297,33 @@ class Dongle(
                 .addDeviceFilter(device)
                 .setSingleDevice(true)
                 .build()
-        val foreground =
-            ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(
-                ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED,
-            )
+        val foreground = if (Build.VERSION.SDK_INT >= 34) {
+            ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle()
+        } else {
+            null
+        }
         suspendCancellableCoroutine { continuation ->
             val callback =
                 object : CompanionDeviceManager.Callback() {
                     override fun onAssociationPending(sender: IntentSender) =
-                        context.startIntentSender(sender, null, 0, 0, 0, foreground.toBundle())
+                        context.startIntentSender(sender, null, 0, 0, 0, foreground)
+
+                    override fun onDeviceFound(sender: IntentSender) {
+                        context.startIntentSender(sender, null, 0, 0, 0, foreground)
+                        continuation.resume(Unit)
+                    }
 
                     override fun onAssociationCreated(association: AssociationInfo) = continuation.resume(Unit)
 
-                    override fun onFailure(error: CharSequence?) = continuation.resume(Unit)
+                    override fun onFailure(error: CharSequence?) {
+                        if (continuation.isActive) continuation.resume(Unit)
+                    }
                 }
-            companions.associate(request, context.mainExecutor, callback)
+            if (Build.VERSION.SDK_INT >= 33) {
+                companions.associate(request, context.mainExecutor, callback)
+            } else {
+                companions.associate(request, callback, null)
+            }
         }
     }
 
@@ -482,7 +505,13 @@ private class Gatt(
         val tx = service.getCharacteristic(TX) ?: return false
         rx = service.getCharacteristic(RX) ?: return false
         gatt.setCharacteristicNotification(tx, true)
-        gatt.writeDescriptor(tx.getDescriptor(NOTIFICATIONS), BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+        val descriptor = tx.getDescriptor(NOTIFICATIONS)
+        if (Build.VERSION.SDK_INT >= 33) {
+            gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+        } else {
+            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            gatt.writeDescriptor(descriptor)
+        }
         return done()
     }
 
@@ -491,8 +520,14 @@ private class Gatt(
             val bytes = frame()
             for (offset in bytes.indices step payload) {
                 val chunk = bytes.copyOfRange(offset, min(offset + payload, bytes.size))
-                val started = gatt.writeCharacteristic(rx!!, chunk, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
-                if (started != BluetoothStatusCodes.SUCCESS || !done()) return false
+                val started = if (Build.VERSION.SDK_INT >= 33) {
+                    gatt.writeCharacteristic(rx!!, chunk, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS
+                } else {
+                    rx!!.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                    rx!!.value = chunk
+                    gatt.writeCharacteristic(rx!!)
+                }
+                if (!started || !done()) return false
             }
             true
         }
@@ -558,6 +593,10 @@ private class Gatt(
         value: ByteArray,
     ) {
         fragments.trySend(value)
+    }
+
+    override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+        if (Build.VERSION.SDK_INT < 33) fragments.trySend(characteristic.value)
     }
 }
 

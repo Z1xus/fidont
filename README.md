@@ -25,7 +25,7 @@ There is no sync, so if you lose the phone or remove the screen lock they are GO
 
 ## Install
 
-Needs Android 14 or newer.  
+Needs Android 12 or newer. The on-device passkey provider needs Android 14 or newer.
 Grab the APK from [releases](https://github.com/Z1xus/fidont/releases) and install it.
 
 ## Dongle
