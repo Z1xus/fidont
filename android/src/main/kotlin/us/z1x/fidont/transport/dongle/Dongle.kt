@@ -503,7 +503,7 @@ private class Gatt(
 
     suspend fun open(): Boolean {
         if (!done()) return false
-        if (!gatt.requestMtu(MTU) || !done()) return false
+        if (Build.VERSION.SDK_INT >= 33 && (!gatt.requestMtu(MTU) || !done())) return false
         if (!gatt.discoverServices() || !done()) return false
         val service = gatt.getService(SERVICE) ?: return false
         val tx = service.getCharacteristic(TX) ?: return false
@@ -565,7 +565,7 @@ private class Gatt(
         status: Int,
     ) {
         payload = min(mtu - ATT_HEADER, MAX_WRITE)
-        done.trySend(Unit)
+        if (Build.VERSION.SDK_INT >= 33) done.trySend(Unit)
     }
 
     override fun onServicesDiscovered(
