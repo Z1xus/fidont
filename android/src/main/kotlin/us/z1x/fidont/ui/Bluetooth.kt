@@ -132,9 +132,9 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
         }
     }
     val state =
-        when (val current = status.takeIf { allowed }) {
+        when (val current = status.takeIf { allowed && powered }) {
             null -> {
-                BluetoothState.NeedsBluetooth
+                if (allowed) BluetoothState.Off else BluetoothState.NeedsBluetooth
             }
 
             HidStatus.Unsupported -> {
