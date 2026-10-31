@@ -3,7 +3,11 @@ package us.z1x.fidont.ui
 import android.Manifest
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -31,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -104,9 +110,24 @@ fun rememberBluetooth(): Pair<BluetoothState, (BluetoothAction) -> Unit> {
             allowed = granted.values.all { it }
         }
     var searched by remember { mutableStateOf(false) }
+    var powered by remember { mutableStateOf(false) }
 
+    DisposableEffect(context, allowed) {
+        if (allowed) {
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    powered = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR) == BluetoothAdapter.STATE_ON
+                }
+            }
+            ContextCompat.registerReceiver(context, receiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED), ContextCompat.RECEIVER_EXPORTED)
+            powered = context.getSystemService(BluetoothManager::class.java).adapter?.isEnabled == true
+            onDispose { context.unregisterReceiver(receiver) }
+        } else {
+            onDispose {}
+        }
+    }
     if (allowed) {
-        LaunchedEffect(Unit) {
+        LaunchedEffect(powered) {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { key.serve() }
         }
     }
