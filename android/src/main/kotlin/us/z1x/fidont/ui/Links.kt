@@ -1,6 +1,7 @@
 package us.z1x.fidont.ui
 
 import android.Manifest
+import android.app.Activity
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -88,7 +89,7 @@ fun rememberLinks(): Links {
                         try {
                             val done =
                                 withTimeoutOrNull(PAIR_TIMEOUT) {
-                                    dongle.pair(computer) {
+                                    dongle.pair(computer, context as? Activity) {
                                         code = it
                                         answer.receive()
                                     }

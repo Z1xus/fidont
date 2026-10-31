@@ -1,6 +1,7 @@
 package us.z1x.fidont.transport.dongle
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.ActivityOptions
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -200,11 +201,12 @@ class Dongle(
     // a person compares the code with the one on the computer, a dongle has no screen for that
     suspend fun pair(
         computer: Boolean,
+        activity: Activity?,
         confirm: suspend (String) -> Boolean,
     ): Boolean {
         var paired = false
         val (device, id) = find(listOf(ByteArray(ID_SIZE) { if (computer) -1 else 0 })) ?: return false
-        associate(id)
+        associate(id, activity)
         connect(device) { gatt ->
             val key = ecdhGenerate()
             gatt.send { frame(byteArrayOf(PAIR.toByte()) + key.public) }
@@ -285,7 +287,9 @@ class Dongle(
     }
 
     // Android lets an app with an associated device show the prompt while the app is closed
-    private suspend fun associate(id: ByteArray) {
+    private suspend fun associate(id: ByteArray, activity: Activity? = null) {
+        val requestContext = if (Build.VERSION.SDK_INT < 33) activity ?: return else context
+        val companions = requestContext.getSystemService(CompanionDeviceManager::class.java)
         if (companions == null || preferences.getBoolean(ASKED, false)) return
         val associated = if (Build.VERSION.SDK_INT >= 33) companions.myAssociations.isNotEmpty() else companions.associations.isNotEmpty()
         if (associated) return
@@ -306,10 +310,10 @@ class Dongle(
             val callback =
                 object : CompanionDeviceManager.Callback() {
                     override fun onAssociationPending(sender: IntentSender) =
-                        context.startIntentSender(sender, null, 0, 0, 0, foreground)
+                        requestContext.startIntentSender(sender, null, 0, 0, 0, foreground)
 
                     override fun onDeviceFound(sender: IntentSender) {
-                        context.startIntentSender(sender, null, 0, 0, 0, foreground)
+                        requestContext.startIntentSender(sender, null, 0, 0, 0, foreground)
                         continuation.resume(Unit)
                     }
 
