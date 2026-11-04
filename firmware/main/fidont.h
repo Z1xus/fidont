@@ -19,11 +19,14 @@
 #define LINK_UPDATE_END 5
 #define LINK_LIGHT 6
 #define LINK_USB_ID 7
+#define LINK_UNPAIR 8
+#define LINK_UNPAIR_FINISH 9
 
 // link messages to the phone
 #define LINK_STATUS 1
 #define LINK_REQUEST 2
 #define LINK_CANCEL 3
+#define LINK_UNPAIR_STATUS 4
 
 #define CTAPHID_CBOR 0x90
 #define CTAPHID_KEEPALIVE 0xbb
@@ -31,7 +34,10 @@
 #define ERROR_BUSY 0x06
 
 bool store_secret(uint8_t secret[SECRET_SIZE]);
-void store_set_secret(const uint8_t secret[SECRET_SIZE]);
+bool store_set_secret(const uint8_t secret[SECRET_SIZE]);
+int store_unpair_state(uint8_t secret[SECRET_SIZE]);
+bool store_unpair(const uint8_t secret[SECRET_SIZE]);
+bool store_unpair_finish(const uint8_t secret[SECRET_SIZE]);
 size_t store_info(uint8_t *info, size_t size);
 void store_set_info(const uint8_t *info, size_t size);
 void store_light(uint8_t light[LIGHT_SIZE]);
@@ -52,6 +58,9 @@ void light_tick(bool request);
 void link_start(void);
 bool link_send(uint8_t type, const uint8_t *data, size_t size);
 void link_wait(bool wait);
+bool link_unpair(bool finish, uint32_t generation);
+bool link_unpairing(void);
+uint32_t link_generation(void);
 
 // called from the USB and Bluetooth tasks, main.c queues them for the main task
 void on_packet(const uint8_t *packet);

@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdatomic.h>
 
 #include "esp_app_desc.h"
 #include "esp_random.h"
@@ -41,8 +42,10 @@ static const ble_uuid128_t tx_uuid = BLE_UUID128_INIT(UUID(2));
 
 static uint8_t secret[SECRET_SIZE];
 static uint8_t paired_secret[SECRET_SIZE];
-static bool paired;
+static atomic_bool paired;
 static bool pairing;
+static atomic_int unpair_state = -1;
+static atomic_bool recovering;
 static bool waiting;
 
 static uint8_t address_type;
@@ -50,6 +53,8 @@ static uint16_t connection = BLE_HS_CONN_HANDLE_NONE;
 static uint16_t tx_handle;
 static esp_timer_handle_t auth_timer;
 static SemaphoreHandle_t sending;
+static SemaphoreHandle_t state_lock;
+static atomic_uint generation;
 
 static struct {
     bool keyed;
@@ -141,6 +146,59 @@ static bool send(uint8_t type, const uint8_t *data, size_t size)
 
 bool link_send(uint8_t type, const uint8_t *data, size_t size) { return session.ready && send(type, data, size); }
 
+bool link_unpairing(void) { return unpair_state == 0 || (unpair_state == 1 && recovering); }
+
+uint32_t link_generation(void) { return atomic_load(&generation); }
+
+bool link_unpair(bool finish, uint32_t expected)
+{
+    xSemaphoreTake(state_lock, portMAX_DELAY);
+    if (expected != link_generation() || connection == BLE_HS_CONN_HANDLE_NONE) {
+        xSemaphoreGive(state_lock);
+        return false;
+    }
+    if (finish) {
+        if (unpair_state == 1) {
+            xSemaphoreGive(state_lock);
+            return true;
+        }
+        if (unpair_state < 0 || !store_unpair(secret)) {
+            xSemaphoreGive(state_lock);
+            return false;
+        }
+        static const char label[] = "fidont unpair recovery";
+        uint8_t input[sizeof(label) - 1 + SECRET_SIZE];
+        uint8_t recovery[SECRET_SIZE];
+        size_t written;
+        memcpy(input, label, sizeof(label) - 1);
+        memcpy(input + sizeof(label) - 1, secret, SECRET_SIZE);
+        if (psa_hash_compute(PSA_ALG_SHA_256, input, sizeof(input), recovery, sizeof(recovery), &written) != PSA_SUCCESS ||
+            written != sizeof(recovery) || !store_unpair_finish(recovery)) {
+            xSemaphoreGive(state_lock);
+            return false;
+        }
+        memcpy(secret, recovery, SECRET_SIZE);
+        unpair_state = 1;
+        paired = false;
+        recovering = true;
+        xSemaphoreGive(state_lock);
+        return true;
+    }
+    if (unpair_state == 1) {
+        xSemaphoreGive(state_lock);
+        return true;
+    }
+    bool done = store_unpair(secret);
+    int state = store_unpair_state(secret);
+    if (state >= 0) {
+        unpair_state = state;
+        paired = state == 0;
+        recovering = true;
+    }
+    xSemaphoreGive(state_lock);
+    return done;
+}
+
 static bool pair(const uint8_t *phone_key, uint8_t *dongle_key)
 {
     psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
@@ -172,9 +230,10 @@ static void hello(const uint8_t *body, size_t size)
     uint8_t reply[FRAME_HEADER + POINT_SIZE];
     uint8_t salt[2 * POINT_SIZE];
     size_t reply_size;
-    if (paired && size == 1 + HELLO_SIZE && body[0] == HELLO) {
+    if ((paired || unpair_state >= 0) && size == 1 + HELLO_SIZE && body[0] == HELLO) {
         reply_size = HELLO_SIZE;
         esp_fill_random(reply + FRAME_HEADER, HELLO_SIZE);
+        recovering = unpair_state >= 0;
     } else if (!paired && size == 1 + POINT_SIZE && body[0] == PAIR && pair(body + 1, reply + FRAME_HEADER)) {
         reply_size = POINT_SIZE;
         pairing = true;
@@ -197,27 +256,35 @@ static void hello(const uint8_t *body, size_t size)
     send(LINK_STATUS, esp_app_get_description()->app_elf_sha256, KEY_SIZE);
 }
 
-static void receive(uint8_t *body, size_t size)
+static bool receive(uint8_t *body, size_t size)
 {
     if (!session.keyed) {
         hello(body, size);
-        return;
+        return true;
     }
     if (size <= TAG_SIZE || !crypt(false, session.rx_key, session.received++, body, size - TAG_SIZE) ||
-        (!session.ready && body[0] != LINK_INFO)) {
+        (!session.ready && body[0] != LINK_INFO) ||
+        (recovering && body[0] != LINK_INFO && body[0] != LINK_UNPAIR && body[0] != LINK_UNPAIR_FINISH)) {
         ble_gap_terminate(connection, BLE_ERR_REM_USER_CONN_TERM);
-        return;
+        return false;
     }
     if (!session.ready) {
         if (pairing) {
+            if (!store_set_secret(paired_secret)) {
+                ble_gap_terminate(connection, BLE_ERR_REM_USER_CONN_TERM);
+                return false;
+            }
+            xSemaphoreTake(state_lock, portMAX_DELAY);
             memcpy(secret, paired_secret, SECRET_SIZE);
-            store_set_secret(secret);
             paired = true;
+            unpair_state = -1;
+            xSemaphoreGive(state_lock);
         }
         session.ready = true;
         esp_timer_stop(auth_timer);
     }
-    on_message(body[0], body + 1, size - TAG_SIZE - 1);
+    if (!recovering || body[0] != LINK_INFO) on_message(body[0], body + 1, size - TAG_SIZE - 1);
+    return true;
 }
 
 static int on_access(uint16_t handle, uint16_t attribute, struct ble_gatt_access_ctxt *context, void *arg)
@@ -236,7 +303,7 @@ static int on_access(uint16_t handle, uint16_t attribute, struct ble_gatt_access
         size_t body = incoming.data[0] | incoming.data[1] << 8;
         if (incoming.size >= FRAME_HEADER + body) {
             incoming.size = 0;
-            receive(incoming.data + FRAME_HEADER, body);
+            if (!receive(incoming.data + FRAME_HEADER, body)) return BLE_ATT_ERR_UNLIKELY;
         }
     }
     return 0;
@@ -261,12 +328,14 @@ static const struct ble_gatt_svc_def services[] = {
 static void describe(void)
 {
     uint8_t data[UUID_SIZE + ID_SIZE + 1] = {UUID(0)};
+    xSemaphoreTake(state_lock, portMAX_DELAY);
     if (paired) {
         uint8_t hash[KEY_SIZE];
         size_t written;
         psa_hash_compute(PSA_ALG_SHA_256, secret, SECRET_SIZE, hash, sizeof(hash), &written);
         memcpy(data + UUID_SIZE, hash, ID_SIZE);
     }
+    xSemaphoreGive(state_lock);
     data[UUID_SIZE + ID_SIZE] = waiting;
     struct ble_hs_adv_fields fields = {
         .flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP,
@@ -299,16 +368,23 @@ static int on_gap(struct ble_gap_event *event, void *arg)
             advertise();
             break;
         }
+        xSemaphoreTake(state_lock, portMAX_DELAY);
+        atomic_fetch_add(&generation, 1);
         connection = event->connect.conn_handle;
         memset(&session, 0, sizeof(session));
         incoming.size = 0;
         pairing = false;
+        recovering = false;
+        xSemaphoreGive(state_lock);
         esp_timer_start_once(auth_timer, AUTH_TIMEOUT_US);
         break;
     case BLE_GAP_EVENT_DISCONNECT:
+        xSemaphoreTake(state_lock, portMAX_DELAY);
+        atomic_fetch_add(&generation, 1);
         connection = BLE_HS_CONN_HANDLE_NONE;
         session.ready = false;
         session.keyed = false;
+        xSemaphoreGive(state_lock);
         esp_timer_stop(auth_timer);
         on_disconnect();
         advertise();
@@ -349,8 +425,11 @@ static void host_task(void *arg)
 void link_start(void)
 {
     const esp_timer_create_args_t timer = {.callback = on_auth_timeout, .name = "auth"};
-    paired = store_secret(secret);
+    unpair_state = store_unpair_state(secret);
+    ESP_ERROR_CHECK(unpair_state == -2 ? ESP_FAIL : ESP_OK);
+    paired = unpair_state < 0 ? store_secret(secret) : unpair_state == 0;
     sending = xSemaphoreCreateMutex();
+    state_lock = xSemaphoreCreateMutex();
     ESP_ERROR_CHECK(esp_timer_create(&timer, &auth_timer));
     ESP_ERROR_CHECK(psa_crypto_init());
     ESP_ERROR_CHECK(nimble_port_init());
