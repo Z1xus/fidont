@@ -30,16 +30,23 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.ParcelUuid
 import android.util.Base64
+import android.util.Log
 import androidx.core.content.edit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -65,6 +72,9 @@ import us.z1x.fidont.dongle.REQUEST
 import us.z1x.fidont.dongle.RESPONSE
 import us.z1x.fidont.dongle.SECRET_SIZE
 import us.z1x.fidont.dongle.STATUS
+import us.z1x.fidont.dongle.UNPAIR
+import us.z1x.fidont.dongle.UNPAIR_FINISH
+import us.z1x.fidont.dongle.UNPAIR_STATUS
 import us.z1x.fidont.dongle.UPDATE_BEGIN
 import us.z1x.fidont.dongle.UPDATE_DATA
 import us.z1x.fidont.dongle.UPDATE_END
@@ -76,6 +86,7 @@ import us.z1x.fidont.dongle.pairingCode
 import us.z1x.fidont.ecdh
 import us.z1x.fidont.ecdhGenerate
 import us.z1x.fidont.random
+import us.z1x.fidont.sha256
 import java.io.File
 import java.io.IOException
 import java.security.KeyFactory
@@ -102,6 +113,8 @@ private const val KEY =
     "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEMWl4HXadTlTux3LzNW81FOdvNT3Ae/Y+pah5KRSIuMhRD+SG1V4U+9MBHxnk1buDaStY3O58m3fWaxBO7J6gaw=="
 private const val SECRET = "secret"
 private const val COMPUTERS = "computers"
+private const val UNPAIRING = "unpairing"
+private const val REPAIR = "repair"
 private const val ASKED = "asked"
 private const val MTU = 517
 private const val DEFAULT_MTU = 23
@@ -120,13 +133,17 @@ private const val BUILD_SIZE = 32
 private const val UPDATE_CHUNK = 2048
 
 // Android throttles an app that starts more than 5 scans in 30 seconds
-private val RETRY = 6.seconds
+private val RETRY = 8.seconds
+private val GATT_TIMEOUT = 15.seconds
+private val CONNECT_TIMEOUT = 60.seconds
 
 private val RELEASE_TIMEOUT = 2.seconds
 private val RELEASE_RETRY = 50.milliseconds
 
 sealed interface Status {
     data object Searching : Status
+
+    data object Connecting : Status
 
     data object Connected : Status
 
@@ -149,9 +166,17 @@ class Dongle(
     private val preferences = context.getSharedPreferences("dongle", Context.MODE_PRIVATE)
     private val companions = context.getSystemService(CompanionDeviceManager::class.java)
     private val serving = Mutex()
+    private val scanning = Mutex()
+    private var scanned = TimeSource.Monotonic.markNow() - RETRY
+    private val pairingScan = MutableStateFlow(false)
     val links = MutableStateFlow(load())
     val status = MutableStateFlow(emptyMap<String, Status>())
     val pending = MutableStateFlow(0)
+    val unpairing = MutableStateFlow(preferences.getString(UNPAIRING, null))
+    val unpairFailed = MutableStateFlow(false)
+    val unpairSaveFailed = MutableStateFlow(false)
+    val repair = MutableStateFlow(preferences.getBoolean(REPAIR, false))
+    private val unpairAttempt = MutableStateFlow(0)
 
     // the signature makes the source of the files not matter
     suspend fun firmware(): ByteArray? =
@@ -186,37 +211,56 @@ class Dongle(
 
     suspend fun setUp(
         device: UsbDevice,
-        progress: (Float) -> Unit,
-    ): Boolean =
-        withContext(Dispatchers.IO) {
+        progress: (Float?) -> Unit,
+    ): Boolean {
+        val paired = withContext(Dispatchers.IO) {
             val secret = random(SECRET_SIZE)
-            val image = firmware() ?: return@withContext false
+            val image = firmware() ?: return@withContext null
             linkPartition(secret).copyInto(image, LINK_OFFSET)
-            val serial = UsbSerial.open(context.getSystemService(UsbManager::class.java), device) ?: return@withContext false
+            val serial = UsbSerial.open(context.getSystemService(UsbManager::class.java), device) ?: return@withContext null
             try {
-                Flasher(serial).flash(image, progress)
-                add(Paired(secret, null))
-                true
+                Flasher(serial).flash(image) { progress(it) }
+                Paired(secret, null)
             } catch (_: IOException) {
-                false
+                null
             } finally {
                 serial.close()
             }
+        } ?: return false
+        status.update { it + (paired.id to Status.Connecting) }
+        add(paired)
+        progress(null)
+        try {
+            withTimeoutOrNull(CONNECT_TIMEOUT) {
+                combine(status, links) { states, saved -> states[paired.id] != Status.Connecting || saved.none { it.id == paired.id } }
+                    .first { it }
+            }
+        } finally {
+            status.update { if (it[paired.id] == Status.Connecting) it - paired.id else it }
         }
+        return true
+    }
 
     // a person compares the code with the one on the computer, a dongle has no screen for that
     suspend fun pair(
         computer: Boolean,
         activity: Activity?,
+        onLinked: () -> Unit,
         confirm: suspend (String) -> Boolean,
     ): Boolean {
         var paired = false
-        val (device, id) = find(listOf(ByteArray(ID_SIZE) { if (computer) -1 else 0 })) ?: return false
+        val found = try {
+            pairingScan.value = true
+            find(listOf(ByteArray(ID_SIZE) { if (computer) -1 else 0 }))
+        } finally {
+            pairingScan.value = false
+        }
+        val (device, id) = found ?: return false
         associate(id, activity)
         connect(device) { gatt ->
             val key = ecdhGenerate()
-            gatt.send { frame(byteArrayOf(PAIR.toByte()) + key.public) }
-            val dongleKey = gatt.receive() ?: return@connect
+            if (!gatt.send { frame(byteArrayOf(PAIR.toByte()) + key.public) }) return@connect
+            val dongleKey = withTimeoutOrNull(GATT_TIMEOUT) { gatt.receive() } ?: return@connect
             val secret = pairedSecret(ecdh(key.private, dongleKey) ?: return@connect, key.public, dongleKey)
             val link = Link(secret, key.public, dongleKey)
             val build = greeting(gatt, link) ?: return@connect
@@ -225,38 +269,51 @@ class Dongle(
             session(gatt, link, Paired(secret, name), build) {
                 add(it)
                 paired = true
+                onLinked()
             }
         }
         return paired
     }
 
-    suspend fun serve(): Nothing =
+    suspend fun serve(): Unit =
         serving.withLock {
             coroutineScope {
                 val sessions = this
                 val busy = MutableStateFlow(emptySet<String>())
-                var scanned = TimeSource.Monotonic.markNow() - RETRY
-                busy.collectLatest { current ->
-                    val idle = links.value.filter { it.id !in current }
+                val active = status.map { states -> states.filterValues { it == Status.Connected || it is Status.Updating }.keys }.distinctUntilChanged()
+                combine(busy, active, links) { current, connected, saved ->
+                    saved.filter { it.id !in current && it.id !in connected }
+                }.collectLatest { idle ->
                     while (idle.isNotEmpty()) {
-                        delay(RETRY - scanned.elapsedNow())
-                        scanned = TimeSource.Monotonic.markNow()
-                        val (device, id) = find(idle.map { linkId(it.secret) }) ?: continue
-                        val paired = idle.first { linkId(it.secret).contentEquals(id) }
+                        val retry = idle.firstOrNull { it.computer == null && it.id == unpairing.value }
+                        val ids = idle.map { linkId(it.secret) } + if (retry != null) listOf(ByteArray(ID_SIZE)) else emptyList()
+                        val (device, id) = find(ids, background = true) ?: continue
+                        val paired = idle.firstOrNull { linkId(it.secret).contentEquals(id) }
+                            ?: retry?.takeIf { id.contentEquals(ByteArray(ID_SIZE)) }
+                            ?: continue
                         associate(id)
                         busy.update { it + paired.id }
                         sessions.launch {
                             try {
+                                status.update { it + (paired.id to Status.Connecting) }
                                 connect(device) { gatt ->
                                     val hello = random(HELLO_SIZE)
-                                    gatt.send { frame(byteArrayOf(HELLO.toByte()) + hello) }
-                                    val link = Link(paired.secret, hello, gatt.receive() ?: return@connect)
+                                    if (!gatt.send { frame(byteArrayOf(HELLO.toByte()) + hello) }) return@connect
+                                    val response = withTimeoutOrNull(GATT_TIMEOUT) { gatt.receive() } ?: return@connect
+                                    val secret = if (id.contentEquals(ByteArray(ID_SIZE)) && unpairing.value == paired.id) {
+                                        sha256("fidont unpair recovery".encodeToByteArray() + paired.secret)
+                                    } else {
+                                        paired.secret
+                                    }
+                                    val link = Link(secret, hello, response)
                                     session(gatt, link, paired, greeting(gatt, link) ?: return@connect) {}
                                 }
                             } finally {
+                                status.update { if (it[paired.id] == Status.Connecting) it - paired.id else it }
                                 busy.update { it - paired.id }
                             }
                         }
+                        break
                     }
                 }
             }
@@ -274,14 +331,39 @@ class Dongle(
                 Intent(context, RequestReceiver::class.java),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
             )
-        scanner.stopScan(intent)
-        if (!enabled) context.getSystemService(NotificationManager::class.java).cancel(REQUEST_NOTIFICATION)
-        val waiting = links.value.map { filter(linkId(it.secret) + if (it.computer == null) byteArrayOf(1) else byteArrayOf()) }
-        if (enabled && waiting.isNotEmpty()) scanner.startScan(waiting, ScanSettings.Builder().build(), intent)
+        try {
+            scanner.stopScan(intent)
+            if (!enabled) context.getSystemService(NotificationManager::class.java).cancel(REQUEST_NOTIFICATION)
+            val waiting = links.value.map { filter(linkId(it.secret) + if (it.computer == null) byteArrayOf(1) else byteArrayOf()) }
+            if (enabled && waiting.isNotEmpty()) scanner.startScan(waiting, ScanSettings.Builder().build(), intent)
+        } catch (error: SecurityException) {
+            Log.w("fidont", "Background Bluetooth scan unavailable", error)
+        }
     }
 
-    fun forget(id: String) {
-        save(links.value.filter { it.id != id })
+    fun forget(id: String, completed: Boolean = false): Boolean {
+        val dongle = links.value.any { it.id == id && it.computer == null }
+        if (completed && (!dongle || unpairing.value != id)) return false
+        val remaining = links.value.filter { it.id != id }
+        val editor = preferences.edit()
+            .putString(SECRET, remaining.firstOrNull { it.computer == null }?.secret?.toHexString())
+            .putStringSet(COMPUTERS, remaining.filter { it.computer != null }.map { "${it.secret.toHexString()} ${it.computer}" }.toSet())
+        if (unpairing.value == id) editor.remove(UNPAIRING)
+        if (completed) editor.putBoolean(REPAIR, true)
+        if (!editor.commit()) {
+            if (dongle) {
+                unpairSaveFailed.value = true
+                unpairFailed.value = true
+            }
+            return false
+        }
+        links.value = remaining
+        if (unpairing.value == id) unpairing.value = null
+        if (completed) repair.value = true
+        if (dongle) {
+            unpairFailed.value = false
+            unpairSaveFailed.value = false
+        }
         if (links.value.isEmpty()) {
             if (Build.VERSION.SDK_INT >= 33) {
                 companions?.myAssociations?.forEach { companions.disassociate(it.id) }
@@ -290,6 +372,22 @@ class Dongle(
             }
             preferences.edit { remove(ASKED) }
         }
+        if (completed) unpairedNotification(context)
+        return true
+    }
+
+    fun unpair(id: String) {
+        if (unpairing.value != id) {
+            if (!preferences.edit().putString(UNPAIRING, id).commit()) {
+                unpairSaveFailed.value = true
+                unpairFailed.value = true
+                return
+            }
+            unpairing.value = id
+        }
+        unpairFailed.value = false
+        unpairSaveFailed.value = false
+        unpairAttempt.update { it + 1 }
     }
 
     // Android lets an app with an associated device show the prompt while the app is closed
@@ -338,7 +436,20 @@ class Dongle(
     }
 
     // the phone keeps one dongle and any number of computers
-    private fun add(paired: Paired) = save(links.value.filter { it.computer != null || paired.computer != null } + paired)
+    private fun add(paired: Paired) {
+        if (paired.computer == null && unpairing.value != null && unpairing.value != paired.id) {
+            preferences.edit(commit = true) { remove(UNPAIRING) }
+            unpairing.value = null
+        }
+        if (paired.computer == null) {
+            unpairFailed.value = false
+            unpairSaveFailed.value = false
+            preferences.edit { remove(REPAIR) }
+            repair.value = false
+            context.getSystemService(NotificationManager::class.java).cancel(UNPAIRED_NOTIFICATION)
+        }
+        save(links.value.filter { it.computer != null || paired.computer != null } + paired)
+    }
 
     private fun load(): List<Paired> {
         val dongle = preferences.getString(SECRET, null)?.let { Paired(it.hexToByteArray(), null) }
@@ -390,7 +501,14 @@ class Dongle(
     }
 
     @SuppressLint("MissingPermission")
-    private suspend fun find(ids: List<ByteArray>): Pair<BluetoothDevice, ByteArray>? {
+    private suspend fun find(ids: List<ByteArray>, background: Boolean = false): Pair<BluetoothDevice, ByteArray>? {
+        if (background) pairingScan.first { !it }
+        scanning.withLock {
+            if (background && pairingScan.value) return null
+            delay(RETRY - scanned.elapsedNow())
+            if (background && pairingScan.value) return null
+            scanned = TimeSource.Monotonic.markNow()
+        }
         val scanner = context.getSystemService(BluetoothManager::class.java).adapter?.bluetoothLeScanner ?: return null
         return suspendCancellableCoroutine { continuation ->
             val callback =
@@ -419,8 +537,7 @@ class Dongle(
         gatt: Gatt,
         link: Link,
     ): ByteArray? =
-        gatt
-            .receive()
+        withTimeoutOrNull(GATT_TIMEOUT) { gatt.receive() }
             ?.let(link::decrypt)
             ?.takeIf { it[0].toInt() == STATUS }
             ?.let { it.copyOfRange(1, it.size) }
@@ -434,14 +551,41 @@ class Dongle(
     ) = coroutineScope {
         // a pairing dongle keeps the secret once it gets this, so the phone keeps it after
         if (!gatt.send { frame(link.encrypt(INFO, context.app.authenticator.info)) }) return@coroutineScope
-        linked(paired)
         status.update { it + (paired.id to Status.Connected) }
         try {
-            if (paired.computer == null) {
+            linked(paired)
+            launch {
+                links.first { current -> current.none { it.id == paired.id } }
+                gatt.close()
+            }
+            val replies = Channel<ByteArray>(Channel.UNLIMITED)
+            val updating = if (paired.computer == null && unpairing.value != paired.id) {
                 launch(Dispatchers.IO) { update(gatt, link, paired.id, build) }
+            } else {
+                null
+            }
+            val lighting = if (paired.computer == null && unpairing.value != paired.id) {
                 launch {
                     context.app.preferences.light
                         .collect { gatt.send { frame(link.encrypt(LIGHT, it.bytes())) } }
+                }
+            } else {
+                null
+            }
+            if (paired.computer == null) {
+                launch {
+                    combine(unpairing, unpairAttempt) { id, attempt -> id to attempt }.collectLatest { (id, _) ->
+                        if (id != paired.id) return@collectLatest
+                        updating?.join()
+                        lighting?.cancelAndJoin()
+                        pending.first { it == 0 }
+                        val token = random(8)
+                        val done = withTimeoutOrNull(GATT_TIMEOUT * 2) {
+                            unpairOperation(gatt, link, UNPAIR, token, replies) &&
+                                unpairOperation(gatt, link, UNPAIR_FINISH, token, replies)
+                        } == true
+                        if (done) forget(paired.id, completed = true) else unpairFailed.value = true
+                    }
                 }
             }
             var request: Job? = null
@@ -464,11 +608,31 @@ class Dongle(
                     CANCEL -> {
                         request?.cancel()
                     }
+
+                    UNPAIR_STATUS -> {
+                        replies.trySend(message.copyOfRange(1, message.size))
+                    }
                 }
             }
             coroutineContext.cancelChildren()
         } finally {
             status.update { it - paired.id }
+        }
+    }
+
+    private suspend fun unpairOperation(
+        gatt: Gatt,
+        link: Link,
+        type: Int,
+        token: ByteArray,
+        replies: Channel<ByteArray>,
+    ): Boolean {
+        if (!gatt.send { frame(link.encrypt(type, token)) }) return false
+        while (true) {
+            val reply = replies.receive()
+            if (reply.size == 10 && reply[0].toInt() == type && reply.copyOfRange(1, 9).contentEquals(token)) {
+                return reply[9].toInt() == 0
+            }
         }
     }
 
@@ -496,55 +660,74 @@ private class Gatt(
     context: Context,
     device: BluetoothDevice,
 ) : BluetoothGattCallback() {
-    private val done = Channel<Unit>(Channel.UNLIMITED)
+    private val connected = Channel<Int>(Channel.CONFLATED)
+    private val mtuChanged = Channel<Int>(Channel.CONFLATED)
+    private val discovered = Channel<Int>(Channel.CONFLATED)
+    private val descriptorWritten = Channel<Int>(Channel.CONFLATED)
+    private val characteristicWritten = Channel<Int>(Channel.CONFLATED)
     private val fragments = Channel<ByteArray>(Channel.UNLIMITED)
     private val frames = Frames()
     private val writing = Mutex()
+    private val closing = Mutex()
+    private val released = Channel<Int>(Channel.CONFLATED)
+    @Volatile
+    private var closed = false
+    private var gattClosed = false
 
     // the replacement needs Android 17
     @Suppress("DEPRECATION")
     private val gatt = device.connectGatt(context, false, this, BluetoothDevice.TRANSPORT_LE)
     private var rx: BluetoothGattCharacteristic? = null
     private var tx: BluetoothGattCharacteristic? = null
-    private val released = Channel<Unit>(Channel.CONFLATED)
-
     @Volatile
     private var releasing = false
+    @Volatile
     private var payload = DEFAULT_MTU - ATT_HEADER
 
     suspend fun open(): Boolean {
-        if (!done()) return false
-        if (Build.VERSION.SDK_INT >= 33 && (!gatt.requestMtu(MTU) || !done())) return false
-        if (!gatt.discoverServices() || !done()) return false
+        if (!done(connected)) return false
+        if (Build.VERSION.SDK_INT >= 33 && (!gatt.requestMtu(MTU) || !done(mtuChanged))) return false
+        if (!gatt.discoverServices() || !done(discovered)) return false
         val service = gatt.getService(SERVICE) ?: return false
         val tx = service.getCharacteristic(TX)?.also { this.tx = it } ?: return false
         rx = service.getCharacteristic(RX) ?: return false
-        gatt.setCharacteristicNotification(tx, true)
-        val descriptor = tx.getDescriptor(NOTIFICATIONS)
-        if (Build.VERSION.SDK_INT >= 33) {
-            gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+        if (!gatt.setCharacteristicNotification(tx, true)) return false
+        val descriptor = tx.getDescriptor(NOTIFICATIONS) ?: return false
+        val started = if (Build.VERSION.SDK_INT >= 33) {
+            gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) == BluetoothStatusCodes.SUCCESS
         } else {
             descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
             gatt.writeDescriptor(descriptor)
         }
-        return done()
+        if (!started) return false
+        return done(descriptorWritten)
     }
 
     suspend fun send(frame: () -> ByteArray): Boolean =
         writing.withLock {
-            val bytes = frame()
-            for (offset in bytes.indices step payload) {
-                val chunk = bytes.copyOfRange(offset, min(offset + payload, bytes.size))
-                val started = if (Build.VERSION.SDK_INT >= 33) {
-                    gatt.writeCharacteristic(rx!!, chunk, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS
-                } else {
-                    rx!!.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                    rx!!.value = chunk
-                    gatt.writeCharacteristic(rx!!)
+            if (closed) return false
+            try {
+                val bytes = frame()
+                val chunkSize = payload
+                for (offset in bytes.indices step chunkSize) {
+                    val chunk = bytes.copyOfRange(offset, min(offset + chunkSize, bytes.size))
+                    val started = if (Build.VERSION.SDK_INT >= 33) {
+                        gatt.writeCharacteristic(rx!!, chunk, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS
+                    } else {
+                        rx!!.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                        rx!!.value = chunk
+                        gatt.writeCharacteristic(rx!!)
+                    }
+                    if (!started || !done(characteristicWritten)) {
+                        close()
+                        return false
+                    }
                 }
-                if (!started || !done()) return false
+                true
+            } catch (error: CancellationException) {
+                close()
+                throw error
             }
-            true
         }
 
     suspend fun receive(): ByteArray? {
@@ -556,18 +739,30 @@ private class Gatt(
     // another app can hold the link open, so the dongle drops it when notifications stop
     suspend fun close() {
         withContext(NonCancellable) {
-            withTimeoutOrNull(RELEASE_TIMEOUT) {
-                val descriptor = tx?.getDescriptor(NOTIFICATIONS) ?: return@withTimeoutOrNull
-                releasing = true
-                // a write cancelled with the session can still be in flight
-                while (!disable(descriptor)) {
-                    if (released.tryReceive().isClosed) return@withTimeoutOrNull
-                    delay(RELEASE_RETRY)
+            closing.withLock {
+                if (gattClosed) return@withLock
+                closed = true
+                connected.close()
+                mtuChanged.close()
+                discovered.close()
+                descriptorWritten.close()
+                characteristicWritten.close()
+                fragments.close()
+                withTimeoutOrNull(RELEASE_TIMEOUT) {
+                    val descriptor = tx?.getDescriptor(NOTIFICATIONS) ?: return@withTimeoutOrNull
+                    releasing = true
+                    // a write cancelled with the session can still be in flight
+                    while (!disable(descriptor)) {
+                        if (released.tryReceive().isClosed) return@withTimeoutOrNull
+                        delay(RELEASE_RETRY)
+                    }
+                    released.receiveCatching()
                 }
-                released.receiveCatching()
+                gatt.close()
+                gattClosed = true
+                released.close()
             }
         }
-        gatt.close()
     }
 
     private fun disable(descriptor: BluetoothGattDescriptor) =
@@ -578,18 +773,24 @@ private class Gatt(
             gatt.writeDescriptor(descriptor)
         }
 
-    private suspend fun done() = done.receiveCatching().isSuccess
+    private suspend fun done(channel: Channel<Int>) =
+        withTimeoutOrNull(GATT_TIMEOUT) { channel.receiveCatching().getOrNull() == BluetoothGatt.GATT_SUCCESS } == true
 
     override fun onConnectionStateChange(
         gatt: BluetoothGatt,
         status: Int,
         newState: Int,
     ) {
-        if (newState == BluetoothProfile.STATE_CONNECTED) {
-            done.trySend(Unit)
+        if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
+            connected.trySend(status)
         } else {
-            done.close()
             released.close()
+            closed = true
+            connected.close()
+            mtuChanged.close()
+            discovered.close()
+            descriptorWritten.close()
+            characteristicWritten.close()
             fragments.close()
         }
     }
@@ -599,15 +800,15 @@ private class Gatt(
         mtu: Int,
         status: Int,
     ) {
-        payload = min(mtu - ATT_HEADER, MAX_WRITE)
-        if (Build.VERSION.SDK_INT >= 33) done.trySend(Unit)
+        if (status == BluetoothGatt.GATT_SUCCESS) payload = min(mtu - ATT_HEADER, MAX_WRITE)
+        if (Build.VERSION.SDK_INT >= 33) mtuChanged.trySend(status)
     }
 
     override fun onServicesDiscovered(
         gatt: BluetoothGatt,
         status: Int,
     ) {
-        done.trySend(Unit)
+        discovered.trySend(status)
     }
 
     override fun onDescriptorWrite(
@@ -615,7 +816,7 @@ private class Gatt(
         descriptor: BluetoothGattDescriptor,
         status: Int,
     ) {
-        (if (releasing) released else done).trySend(Unit)
+        if (descriptor.uuid == NOTIFICATIONS) (if (releasing) released else descriptorWritten).trySend(status)
     }
 
     override fun onCharacteristicWrite(
@@ -623,7 +824,7 @@ private class Gatt(
         characteristic: BluetoothGattCharacteristic,
         status: Int,
     ) {
-        done.trySend(Unit)
+        if (characteristic.uuid == RX) characteristicWritten.trySend(status)
     }
 
     override fun onCharacteristicChanged(
