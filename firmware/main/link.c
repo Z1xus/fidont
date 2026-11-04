@@ -316,6 +316,13 @@ static int on_gap(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_ADV_COMPLETE:
         advertise();
         break;
+    // another app on the phone can hold the link open after fidont leaves
+    case BLE_GAP_EVENT_SUBSCRIBE:
+        if (event->subscribe.attr_handle == tx_handle && event->subscribe.reason == BLE_GAP_SUBSCRIBE_REASON_WRITE &&
+            !event->subscribe.cur_notify) {
+            ble_gap_terminate(event->subscribe.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
+        }
+        break;
     }
     return 0;
 }

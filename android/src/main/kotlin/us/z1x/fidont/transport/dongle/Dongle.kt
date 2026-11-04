@@ -33,6 +33,7 @@ import android.util.Base64
 import androidx.core.content.edit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -45,6 +46,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import us.z1x.fidont.BuildConfig
@@ -83,6 +85,7 @@ import java.security.spec.X509EncodedKeySpec
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.math.min
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
@@ -118,6 +121,9 @@ private const val UPDATE_CHUNK = 2048
 
 // Android throttles an app that starts more than 5 scans in 30 seconds
 private val RETRY = 6.seconds
+
+private val RELEASE_TIMEOUT = 2.seconds
+private val RELEASE_RETRY = 50.milliseconds
 
 sealed interface Status {
     data object Searching : Status
@@ -499,6 +505,11 @@ private class Gatt(
     @Suppress("DEPRECATION")
     private val gatt = device.connectGatt(context, false, this, BluetoothDevice.TRANSPORT_LE)
     private var rx: BluetoothGattCharacteristic? = null
+    private var tx: BluetoothGattCharacteristic? = null
+    private val released = Channel<Unit>(Channel.CONFLATED)
+
+    @Volatile
+    private var releasing = false
     private var payload = DEFAULT_MTU - ATT_HEADER
 
     suspend fun open(): Boolean {
@@ -506,7 +517,7 @@ private class Gatt(
         if (Build.VERSION.SDK_INT >= 33 && (!gatt.requestMtu(MTU) || !done())) return false
         if (!gatt.discoverServices() || !done()) return false
         val service = gatt.getService(SERVICE) ?: return false
-        val tx = service.getCharacteristic(TX) ?: return false
+        val tx = service.getCharacteristic(TX)?.also { this.tx = it } ?: return false
         rx = service.getCharacteristic(RX) ?: return false
         gatt.setCharacteristicNotification(tx, true)
         val descriptor = tx.getDescriptor(NOTIFICATIONS)
@@ -542,7 +553,30 @@ private class Gatt(
         }
     }
 
-    fun close() = gatt.close()
+    // another app can hold the link open, so the dongle drops it when notifications stop
+    suspend fun close() {
+        withContext(NonCancellable) {
+            withTimeoutOrNull(RELEASE_TIMEOUT) {
+                val descriptor = tx?.getDescriptor(NOTIFICATIONS) ?: return@withTimeoutOrNull
+                releasing = true
+                // a write cancelled with the session can still be in flight
+                while (!disable(descriptor)) {
+                    if (released.tryReceive().isClosed) return@withTimeoutOrNull
+                    delay(RELEASE_RETRY)
+                }
+                released.receiveCatching()
+            }
+        }
+        gatt.close()
+    }
+
+    private fun disable(descriptor: BluetoothGattDescriptor) =
+        if (Build.VERSION.SDK_INT >= 33) {
+            gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE) == BluetoothStatusCodes.SUCCESS
+        } else {
+            descriptor.value = BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
+            gatt.writeDescriptor(descriptor)
+        }
 
     private suspend fun done() = done.receiveCatching().isSuccess
 
@@ -555,6 +589,7 @@ private class Gatt(
             done.trySend(Unit)
         } else {
             done.close()
+            released.close()
             fragments.close()
         }
     }
@@ -580,7 +615,7 @@ private class Gatt(
         descriptor: BluetoothGattDescriptor,
         status: Int,
     ) {
-        done.trySend(Unit)
+        (if (releasing) released else done).trySend(Unit)
     }
 
     override fun onCharacteristicWrite(
