@@ -6,6 +6,7 @@ import android.content.Intent
 import android.credentials.CredentialManager
 import android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+import android.os.Build
 import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,9 +31,9 @@ fun rememberSetup(): Setup {
     var provider by remember { mutableStateOf(true) }
 
     LifecycleResumeEffect(Unit) {
-        val service = ComponentName(context, ProviderService::class.java)
         secure = context.getSystemService(KeyguardManager::class.java).isDeviceSecure
-        provider = context.getSystemService(CredentialManager::class.java).isEnabledCredentialProviderService(service)
+        provider = Build.VERSION.SDK_INT < 34 || context.getSystemService(CredentialManager::class.java)
+            .isEnabledCredentialProviderService(ComponentName(context, ProviderService::class.java))
         onPauseOrDispose {}
     }
 

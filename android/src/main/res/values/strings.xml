@@ -13,11 +13,11 @@
     <string name="prompt_verify">Verify it\'s you</string>
 
     <string name="onboarding_welcome">Sign in with this phone</string>
-    <string name="onboarding_welcome_body">fidont keeps your passkeys here and signs you in to apps, websites, and other computers.</string>
+    <string name="onboarding_welcome_body">fidont keeps your passkeys here and signs you in to other devices.</string>
     <string name="onboarding_safe">Keys stay on this phone</string>
     <string name="onboarding_safe_body">They live in the phone\'s secure hardware, and the phone asks for your fingerprint or PIN each time you sign in.</string>
-    <string name="onboarding_setup">Two things to turn on</string>
-    <string name="onboarding_ready">Both are on</string>
+    <string name="onboarding_setup">Set up your phone</string>
+    <string name="onboarding_ready">Ready to go</string>
     <string name="next">Next</string>
     <string name="skip">Skip</string>
     <string name="start">Get started</string>
@@ -30,7 +30,7 @@
 
     <string name="passkeys">Passkeys</string>
     <string name="passkeys_empty">No passkeys yet</string>
-    <string name="passkeys_empty_body">Create one in any app or site that supports passkeys.</string>
+    <string name="passkeys_empty_body">Create one on another device that supports passkeys.</string>
     <string name="delete_passkey">Delete passkey</string>
     <string name="delete">Delete</string>
     <string name="delete_title">Delete passkey for %1$s?</string>

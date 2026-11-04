@@ -1,0 +1,7 @@
+<resources>
+    <bool name="credential_provider_enabled">true</bool>
+    <string name="onboarding_welcome_body">fidont keeps your passkeys here and signs you in to apps, websites, and other computers.</string>
+    <string name="onboarding_setup">Two things to turn on</string>
+    <string name="onboarding_ready">Both are on</string>
+    <string name="passkeys_empty_body">Create one in any app or site that supports passkeys.</string>
+</resources>

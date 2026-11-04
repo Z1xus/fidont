@@ -12,6 +12,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import androidx.core.content.ContextCompat
+import androidx.core.content.IntentCompat
 import androidx.core.content.edit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
@@ -181,7 +183,7 @@ class HidKey(
                         context: Context,
                         intent: Intent,
                     ) {
-                        val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                        val device = IntentCompat.getParcelableExtra(intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
                         when (intent.action) {
                             BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
                                 searching.value = false
@@ -220,7 +222,7 @@ class HidKey(
             events.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
             events.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
             // the Bluetooth stack is another app, and it sends these
-            context.registerReceiver(receiver, events, Context.RECEIVER_EXPORTED)
+            ContextCompat.registerReceiver(context, receiver, events, ContextCompat.RECEIVER_EXPORTED)
             try {
                 awaitCancellation()
             } finally {

@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.os.CancellationSignal
 import android.os.OutcomeReceiver
+import androidx.annotation.RequiresApi
 import android.util.Base64
 import androidx.credentials.exceptions.ClearCredentialException
 import androidx.credentials.exceptions.CreateCredentialException
@@ -25,6 +26,7 @@ import us.z1x.fidont.store.Credential
 
 const val CREDENTIAL_ID = "id"
 
+@RequiresApi(34)
 class ProviderService : CredentialProviderService() {
     override fun onBeginCreateCredentialRequest(
         request: BeginCreateCredentialRequest,
