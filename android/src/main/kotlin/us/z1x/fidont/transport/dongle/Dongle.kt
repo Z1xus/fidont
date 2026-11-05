@@ -374,7 +374,6 @@ class Dongle(
             }
             preferences.edit { remove(ASKED) }
         }
-        if (completed) unpairedNotification(context)
         return true
     }
 
@@ -448,7 +447,6 @@ class Dongle(
             unpairSaveFailed.value = false
             preferences.edit { remove(REPAIR) }
             repair.value = false
-            context.getSystemService(NotificationManager::class.java).cancel(UNPAIRED_NOTIFICATION)
         }
         save(links.value.filter { it.computer != null || paired.computer != null } + paired)
     }
