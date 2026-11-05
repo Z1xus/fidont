@@ -15,7 +15,10 @@ static nvs_handle_t storage(void)
 {
     static nvs_handle_t handle;
     if (!handle) {
-        ESP_ERROR_CHECK(nvs_flash_init());
+        if (nvs_flash_init() != ESP_OK) {
+            ESP_ERROR_CHECK(nvs_flash_erase());
+            ESP_ERROR_CHECK(nvs_flash_init());
+        }
         ESP_ERROR_CHECK(nvs_open(NAMESPACE, NVS_READWRITE, &handle));
     }
     return handle;
