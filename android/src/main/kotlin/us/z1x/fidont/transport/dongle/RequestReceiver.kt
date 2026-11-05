@@ -16,7 +16,6 @@ import us.z1x.fidont.ui.MainActivity
 
 private const val CHANNEL = "requests"
 const val REQUEST_NOTIFICATION = 1
-const val UNPAIRED_NOTIFICATION = 2
 
 // Android calls this when a request waits while the app is closed
 class RequestReceiver : BroadcastReceiver() {
@@ -48,19 +47,4 @@ fun requestNotification(context: Context): Notification {
         .setAutoCancel(true)
         .setOnlyAlertOnce(true)
         .build()
-}
-
-fun unpairedNotification(context: Context) {
-    if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
-    val manager = context.getSystemService(NotificationManager::class.java)
-    manager.createNotificationChannel(NotificationChannel(CHANNEL, context.getString(R.string.request_channel), NotificationManager.IMPORTANCE_HIGH))
-    val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-    val notification = Notification.Builder(context, CHANNEL)
-        .setSmallIcon(R.drawable.ic_key)
-        .setContentTitle(context.getString(R.string.dongle_unpaired))
-        .setContentText(context.getString(R.string.dongle_unpaired_body))
-        .setContentIntent(open)
-        .setAutoCancel(true)
-        .build()
-    manager.notify(UNPAIRED_NOTIFICATION, notification)
 }
