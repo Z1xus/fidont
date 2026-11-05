@@ -26,6 +26,7 @@ struct event {
     uint8_t type;
     size_t size;
     uint8_t *data;
+    uint32_t generation;
 };
 
 static QueueHandle_t events;
@@ -46,7 +47,7 @@ static esp_ota_handle_t update;
 
 static void post(enum source source, uint8_t type, const uint8_t *data, size_t size)
 {
-    struct event event = {source, type, size, malloc(size)};
+    struct event event = {source, type, size, malloc(size), source == SOURCE_LINK ? link_generation() : 0};
     if (size && !event.data) {
         return;
     }
@@ -62,7 +63,7 @@ void on_disconnect(void) { post(SOURCE_DISCONNECT, 0, NULL, 0); }
 
 void on_request(uint32_t channel, const uint8_t *data, size_t size)
 {
-    if (request.active) {
+    if (request.active || link_unpairing()) {
         uint8_t error = ERROR_BUSY;
         usb_send(channel, CTAPHID_ERROR, &error, 1);
         return;
@@ -94,9 +95,19 @@ void on_cancel(uint32_t channel)
     usb_send(channel, CTAPHID_CBOR, &status, 1);
 }
 
-static void handle(uint8_t type, const uint8_t *data, size_t size)
+static void handle(uint8_t type, const uint8_t *data, size_t size, uint32_t generation)
 {
+    if (link_unpairing() && type != LINK_UNPAIR && type != LINK_UNPAIR_FINISH) return;
     switch (type) {
+    case LINK_UNPAIR:
+    case LINK_UNPAIR_FINISH: {
+        if (size != 8) break;
+        uint8_t result[10] = {type};
+        memcpy(result + 1, data, size);
+        result[9] = !request.active && !update_partition && link_unpair(type == LINK_UNPAIR_FINISH, generation) ? 0 : 1;
+        link_send(LINK_UNPAIR_STATUS, result, sizeof(result));
+        break;
+    }
     case LINK_INFO:
         if (size <= MAX_INFO && (size != info_size || memcmp(info, data, size) != 0)) {
             memcpy(info, data, size);
@@ -160,7 +171,7 @@ void app_main(void)
                 usb_packet(event.data);
                 break;
             case SOURCE_LINK:
-                handle(event.type, event.data, event.size);
+                handle(event.type, event.data, event.size, event.generation);
                 break;
             case SOURCE_DISCONNECT:
                 request.forwarded = false;

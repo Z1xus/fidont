@@ -29,6 +29,7 @@ sealed interface DongleState {
     data class Unpaired(
         val board: Boolean,
         val failure: Failure? = null,
+        val repair: Boolean = false,
     ) : DongleState
 
     data class SettingUp(
@@ -41,7 +42,11 @@ sealed interface DongleState {
 
     data object Searching : DongleState
 
+    data object Connecting : DongleState
+
     data object Connected : DongleState
+
+    data class Unpairing(val waiting: Boolean, val failed: Boolean, val needsBluetooth: Boolean, val saveFailed: Boolean) : DongleState
 
     data class Updating(
         val progress: Float,
@@ -50,7 +55,7 @@ sealed interface DongleState {
     enum class Failure { Download, SetUp, Pair }
 }
 
-enum class DongleAction { SetUp, Pair, Cancel, Allow, Forget }
+enum class DongleAction { SetUp, Pair, Cancel, Allow, Forget, ForgetLocal, RetryUnpair }
 
 @Composable
 fun DongleRow(
@@ -105,6 +110,31 @@ fun DongleSheet(
                 }
             }
 
+            DongleState.Connecting -> {
+                LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 8.dp))
+                TextButton(onClick = { onAction(DongleAction.Forget) }, Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.dongle_forget))
+                }
+            }
+
+            is DongleState.Unpairing -> {
+                if (state.needsBluetooth) {
+                    Button(onClick = { onAction(DongleAction.Allow) }, Modifier.fillMaxWidth().padding(top = 32.dp)) {
+                        Text(stringResource(R.string.allow))
+                    }
+                }
+                if (state.failed) {
+                    Button(onClick = { onAction(DongleAction.RetryUnpair) }, Modifier.fillMaxWidth().padding(top = 32.dp)) {
+                        Text(stringResource(R.string.try_again))
+                    }
+                } else {
+                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 8.dp))
+                }
+                TextButton(onClick = { onAction(DongleAction.ForgetLocal) }, Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.dongle_forget_local))
+                }
+            }
+
             is DongleState.Unpaired -> {
                 if (state.board) {
                     Button(onClick = { onAction(DongleAction.SetUp) }, Modifier.fillMaxWidth().padding(top = 32.dp)) {
@@ -126,7 +156,7 @@ fun DongleSheet(
                     }
                 }
                 Button(
-                    onClick = { onAction(DongleAction.Forget) },
+                    onClick = { onAction(if (state == DongleState.NeedsBluetooth) DongleAction.ForgetLocal else DongleAction.Forget) },
                     modifier = Modifier.fillMaxWidth().padding(top = if (state == DongleState.NeedsBluetooth) 4.dp else 32.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = scheme.errorContainer, contentColor = scheme.onErrorContainer),
                 ) { Text(stringResource(R.string.dongle_forget)) }
@@ -158,6 +188,7 @@ private fun title(state: DongleState): Int =
                 state.failure == DongleState.Failure.Download -> R.string.dongle_download_failed
                 state.failure == DongleState.Failure.SetUp -> R.string.dongle_failed
                 state.failure == DongleState.Failure.Pair -> R.string.dongle_pair_failed
+                state.repair -> R.string.dongle_unpaired
                 state.board -> R.string.dongle_found
                 else -> R.string.dongle_none
             }
@@ -179,8 +210,20 @@ private fun title(state: DongleState): Int =
             R.string.dongle_searching
         }
 
+        DongleState.Connecting -> {
+            R.string.dongle_connecting
+        }
+
         DongleState.Connected -> {
             R.string.dongle_connected
+        }
+
+        is DongleState.Unpairing -> {
+            when {
+                state.failed -> R.string.dongle_unpair_failed
+                state.waiting || state.needsBluetooth -> R.string.dongle_unpair_queued
+                else -> R.string.dongle_unpairing
+            }
         }
 
         is DongleState.Updating -> {
@@ -195,6 +238,7 @@ private fun body(state: DongleState): Int =
                 state.failure == DongleState.Failure.Download -> R.string.dongle_download_failed_body
                 state.failure == DongleState.Failure.SetUp -> R.string.dongle_failed_body
                 state.failure == DongleState.Failure.Pair -> R.string.dongle_pair_failed_body
+                state.repair -> R.string.dongle_unpaired_body
                 state.board -> R.string.dongle_found_body
                 else -> R.string.dongle_none_body
             }
@@ -216,8 +260,22 @@ private fun body(state: DongleState): Int =
             R.string.dongle_searching_body
         }
 
+        DongleState.Connecting -> {
+            R.string.dongle_connecting_body
+        }
+
         DongleState.Connected -> {
             R.string.dongle_connected_body
+        }
+
+        is DongleState.Unpairing -> {
+            when {
+                state.saveFailed -> R.string.dongle_unpair_save_failed_body
+                state.needsBluetooth -> R.string.dongle_unpair_permission_body
+                state.failed -> R.string.dongle_unpair_failed_body
+                state.waiting -> R.string.dongle_unpair_queued_body
+                else -> R.string.dongle_unpairing_body
+            }
         }
 
         is DongleState.Updating -> {
