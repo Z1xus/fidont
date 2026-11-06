@@ -222,7 +222,8 @@ class Dongle(
             val serial = UsbSerial.open(context.getSystemService(UsbManager::class.java), device) ?: return@withContext null
             try {
                 Flasher(serial).flash(image) { progress(it) }
-                Paired(secret, null)
+                // the dongle has the secret now, so save it before a cancelled setup can drop it
+                Paired(secret, null).also(::add)
             } catch (_: IOException) {
                 null
             } finally {
@@ -230,7 +231,6 @@ class Dongle(
             }
         } ?: return false
         status.update { it + (paired.id to Status.Connecting) }
-        add(paired)
         progress(null)
         try {
             withTimeoutOrNull(CONNECT_TIMEOUT) {

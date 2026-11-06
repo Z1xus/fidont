@@ -58,7 +58,7 @@ void light_tick(bool request);
 void link_start(void);
 bool link_send(uint8_t type, const uint8_t *data, size_t size);
 void link_wait(bool wait);
-bool link_unpair(bool finish, uint32_t generation);
+bool link_unpair(bool finish, uint32_t generation, bool busy);
 bool link_unpairing(void);
 uint32_t link_generation(void);
 

@@ -102,14 +102,16 @@ void on_cancel(uint32_t channel)
 
 static void handle(uint8_t type, const uint8_t *data, size_t size, uint32_t generation)
 {
-    if (link_unpairing() && type != LINK_UNPAIR && type != LINK_UNPAIR_FINISH) return;
+    if (link_unpairing() && type != LINK_UNPAIR && type != LINK_UNPAIR_FINISH)
+        return;
     switch (type) {
     case LINK_UNPAIR:
     case LINK_UNPAIR_FINISH: {
-        if (size != 8) break;
+        if (size != 8)
+            break;
         uint8_t result[10] = {type};
         memcpy(result + 1, data, size);
-        result[9] = !request.active && !update_partition && link_unpair(type == LINK_UNPAIR_FINISH, generation) ? 0 : 1;
+        result[9] = link_unpair(type == LINK_UNPAIR_FINISH, generation, request.active || update_partition) ? 0 : 1;
         link_send(LINK_UNPAIR_STATUS, result, sizeof(result));
         break;
     }

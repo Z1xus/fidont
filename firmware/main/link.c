@@ -150,18 +150,22 @@ bool link_unpairing(void) { return unpair_state == 0 || (unpair_state == 1 && re
 
 uint32_t link_generation(void) { return atomic_load(&generation); }
 
-bool link_unpair(bool finish, uint32_t expected)
+bool link_unpair(bool finish, uint32_t expected, bool busy)
 {
     xSemaphoreTake(state_lock, portMAX_DELAY);
     if (expected != link_generation() || connection == BLE_HS_CONN_HANDLE_NONE) {
         xSemaphoreGive(state_lock);
         return false;
     }
+    if (unpair_state == 1) {
+        xSemaphoreGive(state_lock);
+        return true;
+    }
+    if (busy) {
+        xSemaphoreGive(state_lock);
+        return false;
+    }
     if (finish) {
-        if (unpair_state == 1) {
-            xSemaphoreGive(state_lock);
-            return true;
-        }
         if (unpair_state < 0 || !store_unpair(secret)) {
             xSemaphoreGive(state_lock);
             return false;
@@ -172,7 +176,8 @@ bool link_unpair(bool finish, uint32_t expected)
         size_t written;
         memcpy(input, label, sizeof(label) - 1);
         memcpy(input + sizeof(label) - 1, secret, SECRET_SIZE);
-        if (psa_hash_compute(PSA_ALG_SHA_256, input, sizeof(input), recovery, sizeof(recovery), &written) != PSA_SUCCESS ||
+        if (psa_hash_compute(PSA_ALG_SHA_256, input, sizeof(input), recovery, sizeof(recovery), &written) !=
+                PSA_SUCCESS ||
             written != sizeof(recovery) || !store_unpair_finish(recovery)) {
             xSemaphoreGive(state_lock);
             return false;
@@ -181,10 +186,6 @@ bool link_unpair(bool finish, uint32_t expected)
         unpair_state = 1;
         paired = false;
         recovering = true;
-        xSemaphoreGive(state_lock);
-        return true;
-    }
-    if (unpair_state == 1) {
         xSemaphoreGive(state_lock);
         return true;
     }
@@ -283,7 +284,8 @@ static bool receive(uint8_t *body, size_t size)
         session.ready = true;
         esp_timer_stop(auth_timer);
     }
-    if (!recovering || body[0] != LINK_INFO) on_message(body[0], body + 1, size - TAG_SIZE - 1);
+    if (!recovering || body[0] != LINK_INFO)
+        on_message(body[0], body + 1, size - TAG_SIZE - 1);
     return true;
 }
 
@@ -303,7 +305,8 @@ static int on_access(uint16_t handle, uint16_t attribute, struct ble_gatt_access
         size_t body = incoming.data[0] | incoming.data[1] << 8;
         if (incoming.size >= FRAME_HEADER + body) {
             incoming.size = 0;
-            if (!receive(incoming.data + FRAME_HEADER, body)) return BLE_ATT_ERR_UNLIKELY;
+            if (!receive(incoming.data + FRAME_HEADER, body))
+                return BLE_ATT_ERR_UNLIKELY;
         }
     }
     return 0;
@@ -426,7 +429,6 @@ void link_start(void)
 {
     const esp_timer_create_args_t timer = {.callback = on_auth_timeout, .name = "auth"};
     unpair_state = store_unpair_state(secret);
-    ESP_ERROR_CHECK(unpair_state == -2 ? ESP_FAIL : ESP_OK);
     paired = unpair_state < 0 ? store_secret(secret) : unpair_state == 0;
     sending = xSemaphoreCreateMutex();
     state_lock = xSemaphoreCreateMutex();
