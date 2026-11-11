@@ -64,6 +64,7 @@ private const val CREDENTIAL_ID_SIZE = 32
 private const val MAX_MESSAGE_SIZE = 4096
 private const val MAX_ALLOW_LIST = 16
 private val PIN_PROTOCOLS = listOf(2, 1)
+private val TOUCH_PROBES = setOf(".dummy", "make.me.blink")
 private val TOKEN_LIFETIME = 10.minutes
 private val AAGUID = "f1d0badc0def4f1d8badc0def1d0badc".hexToByteArray()
 
@@ -257,6 +258,10 @@ class Authenticator(
         }
         val clientDataHash = parameters[1L] as? ByteArray ?: missing()
         val rpId = rp["id"] as? String ?: missing()
+        if (rpId in TOUCH_PROBES) {
+            keys.verify()
+            throw CtapException(OPERATION_DENIED)
+        }
         parameters[8L]?.let { authorize(it, clientDataHash, MAKE, rpId) }
         val registration =
             register(
