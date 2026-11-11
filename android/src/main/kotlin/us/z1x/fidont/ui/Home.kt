@@ -62,7 +62,7 @@ fun Home(
     val setup = rememberSetup()
     var opened by remember { mutableStateOf<Credential?>(null) }
     var deleting by remember { mutableStateOf<Credential?>(null) }
-    var forgetting by remember { mutableStateOf(false) }
+    var forgetting by remember { mutableStateOf<DongleAction?>(null) }
     var dongleOpen by remember { mutableStateOf(false) }
     val links = rememberLinks()
     val dongle = links.dongle
@@ -129,7 +129,9 @@ fun Home(
 
     if (dongleOpen) {
         ModalBottomSheet(onDismissRequest = { dongleOpen = false }) {
-            DongleSheet(dongle) { if (it == DongleAction.Forget) forgetting = true else onDongle(it) }
+            DongleSheet(dongle) {
+                if (it == DongleAction.Forget || it == DongleAction.ForgetLocal) forgetting = it else onDongle(it)
+            }
         }
     }
 
@@ -153,16 +155,16 @@ fun Home(
         )
     }
 
-    if (forgetting) {
+    forgetting?.let { action ->
         Confirm(
             title = stringResource(R.string.dongle_forget_title),
-            body = R.string.dongle_forget_body,
+            body = if (action == DongleAction.ForgetLocal) R.string.dongle_forget_local_body else R.string.dongle_forget_body,
             action = R.string.forget,
-            onDismiss = { forgetting = false },
+            onDismiss = { forgetting = null },
             onConfirm = {
-                onDongle(DongleAction.Forget)
-                forgetting = false
-                dongleOpen = false
+                onDongle(action)
+                forgetting = null
+                if (action == DongleAction.ForgetLocal) dongleOpen = false
             },
         )
     }

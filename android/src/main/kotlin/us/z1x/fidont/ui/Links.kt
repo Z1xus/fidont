@@ -27,11 +27,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
 import us.z1x.fidont.app
 import us.z1x.fidont.transport.dongle.Status
 import kotlin.coroutines.resume
@@ -60,6 +61,9 @@ fun rememberLinks(): Links {
     val usb = remember { context.getSystemService(UsbManager::class.java) }
     val links by dongle.links.collectAsState()
     val statuses by dongle.status.collectAsState()
+    val unpairing by dongle.unpairing.collectAsState()
+    val unpairFailed by dongle.unpairFailed.collectAsState()
+    val repair by dongle.repair.collectAsState()
     val paired = links.firstOrNull { it.computer == null }
     val computers = links.filter { it.computer != null }
     var board by remember { mutableStateOf<UsbDevice?>(null) }
@@ -84,21 +88,33 @@ fun rememberLinks(): Links {
             if (allowed) {
                 failure = null
                 missed = false
+                val targetComputer = computer
                 pairing =
-                    scope.launch {
+                    scope.launch pairingJob@{
+                        var linked = false
+                        val timeout = launch {
+                            delay(PAIR_TIMEOUT)
+                            if (targetComputer) missed = true else failure = DongleState.Failure.Pair
+                            this@pairingJob.cancel()
+                        }
                         try {
-                            val done =
-                                withTimeoutOrNull(PAIR_TIMEOUT) {
-                                    dongle.pair(computer, context as? Activity) {
-                                        code = it
-                                        answer.receive()
-                                    }
-                                }
-                            if (done != true && computer) missed = true
-                            if (done != true && !computer) failure = DongleState.Failure.Pair
+                            val done = dongle.pair(targetComputer, context as? Activity, onLinked = {
+                                linked = true
+                                timeout.cancel()
+                                pairing = null
+                                code = null
+                            }) {
+                                code = it
+                                answer.receive()
+                            }
+                            if (!done && targetComputer) missed = true
+                            if (!done && !targetComputer) failure = DongleState.Failure.Pair
                         } finally {
-                            pairing = null
-                            code = null
+                            timeout.cancel()
+                            if (!linked) {
+                                pairing = null
+                                code = null
+                            }
                         }
                     }
             }
@@ -111,15 +127,18 @@ fun rememberLinks(): Links {
         }
     }
     if (allowed && links.isNotEmpty()) {
-        LaunchedEffect(links) {
+        LaunchedEffect(lifecycle) {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 try {
                     dongle.watch(false)
-                    dongle.serve()
+                    awaitCancellation()
                 } finally {
                     dongle.watch(true)
                 }
             }
+        }
+        LaunchedEffect(lifecycle) {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { dongle.serve() }
         }
     }
     // the notice is how a request reaches the phone while the app is closed
@@ -137,8 +156,13 @@ fun rememberLinks(): Links {
                 DongleState.Pairing
             }
 
+            paired != null && (unpairing == paired.id || unpairFailed) -> {
+                val connected = statuses[paired.id] == Status.Connected || statuses[paired.id] is Status.Updating
+                DongleState.Unpairing(waiting = !connected, failed = unpairFailed, needsBluetooth = !allowed)
+            }
+
             paired == null || board != null -> {
-                DongleState.Unpaired(board != null, failure)
+                DongleState.Unpaired(board != null, failure, repair)
             }
 
             !allowed -> {
@@ -148,6 +172,7 @@ fun rememberLinks(): Links {
             else -> {
                 when (val current = statuses[paired.id]) {
                     null, Status.Searching -> DongleState.Searching
+                    Status.Connecting -> DongleState.Connecting
                     Status.Connected -> DongleState.Connected
                     is Status.Updating -> DongleState.Updating(current.progress)
                 }
@@ -176,7 +201,10 @@ fun rememberLinks(): Links {
                                 when {
                                     dongle.firmware() == null -> DongleState.Failure.Download
                                     !usbPermission(context, usb, device) -> DongleState.Failure.SetUp
-                                    !dongle.setUp(device) { progress = it } -> DongleState.Failure.SetUp
+                                    !dongle.setUp(device) {
+                                        progress = it
+                                        if (it == null) board = null
+                                    } -> DongleState.Failure.SetUp
                                     else -> null
                                 }
                             board = null
@@ -198,7 +226,11 @@ fun rememberLinks(): Links {
                     allow.launch(BLUETOOTH)
                 }
 
-                DongleAction.Forget -> {
+                DongleAction.Forget, DongleAction.RetryUnpair -> {
+                    paired?.let { dongle.unpair(it.id) }
+                }
+
+                DongleAction.ForgetLocal -> {
                     paired?.let { dongle.forget(it.id) }
                 }
             }

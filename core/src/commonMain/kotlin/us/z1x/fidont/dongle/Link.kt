@@ -11,6 +11,7 @@ const val PAIR = 2
 const val STATUS = 1
 const val REQUEST = 2
 const val CANCEL = 3
+const val UNPAIR_STATUS = 4
 
 const val INFO = 1
 const val RESPONSE = 2
@@ -19,6 +20,8 @@ const val UPDATE_DATA = 4
 const val UPDATE_END = 5
 const val LIGHT = 6
 const val USB_ID = 7
+const val UNPAIR = 8
+const val UNPAIR_FINISH = 9
 
 const val SECRET_SIZE = 32
 const val ID_SIZE = 8
