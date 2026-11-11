@@ -226,7 +226,7 @@ class Authenticator(
         val candidates = if (allow.isEmpty()) credentials.discoverable(rpId).executeAsList() else known(rpId, allow)
         val credential =
             when (candidates.size) {
-                0 -> throw CtapException(NO_CREDENTIALS)
+                0 -> throw CtapException(if (keys.verify()) NO_CREDENTIALS else NOT_ALLOWED)
                 1 -> candidates.single()
                 else -> choose(candidates) ?: throw CtapException(OPERATION_DENIED)
             }
