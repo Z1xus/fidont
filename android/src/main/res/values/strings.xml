@@ -72,9 +72,9 @@
     <string name="dongle_connected">Connected</string>
     <string name="dongle_connected_body">Requests from the computer show up here.</string>
     <string name="dongle_searching">Not connected</string>
+    <string name="dongle_searching_body">Plug the dongle into a computer nearby.</string>
     <string name="dongle_connecting">Connecting…</string>
     <string name="dongle_connecting_body">Connecting to the dongle.</string>
-    <string name="dongle_searching_body">Plug the dongle into a computer nearby.</string>
     <string name="dongle_updating">Updating…</string>
     <string name="dongle_updating_body">Keep the dongle plugged in.</string>
     <string name="dongle_forget">Forget dongle</string>

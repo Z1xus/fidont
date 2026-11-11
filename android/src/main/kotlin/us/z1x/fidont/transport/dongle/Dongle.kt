@@ -24,13 +24,13 @@ import android.companion.CompanionDeviceManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
+import android.content.SharedPreferences
 import android.graphics.Color
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.ParcelUuid
 import android.util.Base64
-import android.util.Log
 import androidx.core.content.edit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -337,32 +337,28 @@ class Dongle(
             if (!enabled) context.getSystemService(NotificationManager::class.java).cancel(REQUEST_NOTIFICATION)
             val waiting = links.value.map { filter(linkId(it.secret) + if (it.computer == null) byteArrayOf(1) else byteArrayOf()) }
             if (enabled && waiting.isNotEmpty()) scanner.startScan(waiting, ScanSettings.Builder().build(), intent)
-        } catch (error: SecurityException) {
-            Log.w("fidont", "Background Bluetooth scan unavailable", error)
+        } catch (_: SecurityException) {
         }
     }
 
-    fun forget(id: String, completed: Boolean = false): Boolean {
+    fun forget(
+        id: String,
+        completed: Boolean = false,
+    ) {
         val dongle = links.value.any { it.id == id && it.computer == null }
-        if (completed && (!dongle || unpairing.value != id)) return false
+        if (completed && (!dongle || unpairing.value != id)) return
         val remaining = links.value.filter { it.id != id }
-        val editor = preferences.edit()
-            .putString(SECRET, remaining.firstOrNull { it.computer == null }?.secret?.toHexString())
-            .putStringSet(COMPUTERS, remaining.filter { it.computer != null }.map { "${it.secret.toHexString()} ${it.computer}" }.toSet())
+        val editor = preferences.edit().putLinks(remaining)
         if (unpairing.value == id) editor.remove(UNPAIRING)
         if (completed) editor.putBoolean(REPAIR, true)
         if (!editor.commit()) {
-            if (dongle) {
-                unpairFailed.value = true
-            }
-            return false
+            if (dongle) unpairFailed.value = true
+            return
         }
         links.value = remaining
         if (unpairing.value == id) unpairing.value = null
         if (completed) repair.value = true
-        if (dongle) {
-            unpairFailed.value = false
-        }
+        if (dongle) unpairFailed.value = false
         if (links.value.isEmpty()) {
             if (Build.VERSION.SDK_INT >= 33) {
                 companions?.myAssociations?.forEach { companions.disassociate(it.id) }
@@ -371,7 +367,6 @@ class Dongle(
             }
             preferences.edit { remove(ASKED) }
         }
-        return true
     }
 
     fun unpair(id: String) {
@@ -455,10 +450,7 @@ class Dongle(
     }
 
     private fun save(value: List<Paired>) {
-        preferences.edit {
-            putString(SECRET, value.firstOrNull { it.computer == null }?.secret?.toHexString())
-            putStringSet(COMPUTERS, value.filter { it.computer != null }.map { "${it.secret.toHexString()} ${it.computer}" }.toSet())
-        }
+        preferences.edit { putLinks(value) }
         links.value = value
     }
 
@@ -553,23 +545,21 @@ class Dongle(
                 gatt.close()
             }
             val replies = Channel<ByteArray>(Channel.UNLIMITED)
-            val updating = if (paired.computer == null && unpairing.value != paired.id) {
-                launch(Dispatchers.IO) { update(gatt, link, paired.id, build) }
-            } else {
-                null
-            }
-            val settings = if (paired.computer == null && unpairing.value != paired.id) {
-                launch {
+            val kept = paired.computer == null && unpairing.value != paired.id
+            val updating = if (kept) launch(Dispatchers.IO) { update(gatt, link, paired.id, build) } else null
+            val settings =
+                if (kept) {
                     launch {
-                        context.app.preferences.usbId
-                            .collect { gatt.send { frame(link.encrypt(USB_ID, it.bytes())) } }
+                        launch {
+                            context.app.preferences.usbId
+                                .collect { gatt.send { frame(link.encrypt(USB_ID, it.bytes())) } }
+                        }
+                        context.app.preferences.light
+                            .collect { gatt.send { frame(link.encrypt(LIGHT, it.bytes())) } }
                     }
-                    context.app.preferences.light
-                        .collect { gatt.send { frame(link.encrypt(LIGHT, it.bytes())) } }
+                } else {
+                    null
                 }
-            } else {
-                null
-            }
             if (paired.computer == null) {
                 launch {
                     combine(unpairing, unpairAttempt) { id, attempt -> id to attempt }.collectLatest { (id, _) ->
@@ -843,5 +833,9 @@ private fun Light.bytes(): ByteArray {
     val color = Color.HSVToColor(floatArrayOf(hue, 1f, brightness * brightness))
     return byteArrayOf(mode.ordinal.toByte(), Color.red(color).toByte(), Color.green(color).toByte(), Color.blue(color).toByte())
 }
+
+private fun SharedPreferences.Editor.putLinks(value: List<Paired>) =
+    putString(SECRET, value.firstOrNull { it.computer == null }?.secret?.toHexString())
+        .putStringSet(COMPUTERS, value.filter { it.computer != null }.map { "${it.secret.toHexString()} ${it.computer}" }.toSet())
 
 private fun UsbId.bytes() = byteArrayOf((vendor shr 8).toByte(), vendor.toByte(), (product shr 8).toByte(), product.toByte())

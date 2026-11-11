@@ -226,16 +226,12 @@ fun rememberLinks(): Links {
                     allow.launch(BLUETOOTH)
                 }
 
-                DongleAction.Forget -> {
+                DongleAction.Forget, DongleAction.RetryUnpair -> {
                     paired?.let { dongle.unpair(it.id) }
                 }
 
                 DongleAction.ForgetLocal -> {
                     paired?.let { dongle.forget(it.id) }
-                }
-
-                DongleAction.RetryUnpair -> {
-                    paired?.let { dongle.unpair(it.id) }
                 }
             }
         },
