@@ -312,9 +312,13 @@ class Authenticator(
             UV_TOKEN -> {
                 val shared = shared(parameters[1L], parameters[3L])
                 val permissions = parameters[9L] as? Long ?: missing()
+                val rpId = parameters[10L] as? String
+                if (permissions and MAKE == 0L && rpId != null && credentials.all().executeAsList().none { it.rpId == rpId }) {
+                    throw CtapException(NO_CREDENTIALS)
+                }
                 // a credential asks for the fingerprint itself when it signs
                 if (permissions and (MAKE or GET).inv() != 0L && !keys.verify()) throw CtapException(OPERATION_DENIED)
-                val issued = Token(random(KEY_SIZE), parameters[1L] as Long, permissions, parameters[10L] as? String)
+                val issued = Token(random(KEY_SIZE), parameters[1L] as Long, permissions, rpId)
                 token = issued
                 mapOf(2 to shared.encrypt(issued.value))
             }
