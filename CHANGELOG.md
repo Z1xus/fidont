@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.20
+
+- Set the dongle's USB ID in settings
+
 ## 0.1.19
 
 - Android 12 and 13 support, thanks @ZanzyTHEbar ([#2](https://github.com/Z1xus/fidont/pull/2))
