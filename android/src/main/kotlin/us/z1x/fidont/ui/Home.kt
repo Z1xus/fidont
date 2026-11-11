@@ -84,9 +84,6 @@ fun Home(
     LaunchedEffect(board) {
         if (board) dongleOpen = true
     }
-    LaunchedEffect((dongle as? DongleState.Unpaired)?.repair) {
-        if ((dongle as? DongleState.Unpaired)?.repair == true) dongleOpen = true
-    }
     // a computer that was paired or forgotten closes its sheet
     LaunchedEffect(links.helper.computers.size) {
         helperOpen = false

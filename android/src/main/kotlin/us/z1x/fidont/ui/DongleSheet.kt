@@ -127,10 +127,13 @@ fun DongleSheet(
                     Button(onClick = { onAction(DongleAction.RetryUnpair) }, Modifier.fillMaxWidth().padding(top = 32.dp)) {
                         Text(stringResource(R.string.try_again))
                     }
-                } else {
+                } else if (!state.waiting) {
                     LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 8.dp))
                 }
-                TextButton(onClick = { onAction(DongleAction.ForgetLocal) }, Modifier.fillMaxWidth()) {
+                TextButton(
+                    onClick = { onAction(DongleAction.ForgetLocal) },
+                    Modifier.fillMaxWidth().padding(top = if (state.waiting && !state.failed && !state.needsBluetooth) 24.dp else 0.dp),
+                ) {
                     Text(stringResource(R.string.dongle_forget_local))
                 }
             }
