@@ -45,7 +45,6 @@ fun rememberSetup(): Setup {
             intent.putExtra(Settings.EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED, BIOMETRIC_STRONG or DEVICE_CREDENTIAL)
             context.startActivity(intent)
         },
-        // the provider action asks to replace the preferred service, this one only opens the list
-        onProvider = { context.startActivity(Intent(Settings.ACTION_SYNC_SETTINGS)) },
+        onProvider = { if (Build.VERSION.SDK_INT >= 34) androidx.credentials.CredentialManager.create(context).createSettingsPendingIntent().send() },
     )
 }

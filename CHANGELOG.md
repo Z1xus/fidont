@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.21
+- The passkey provider setting opens on all phones
+
 ## 0.1.20
 
 - Set the dongle's USB ID in settings
