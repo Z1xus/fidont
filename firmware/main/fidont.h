@@ -9,6 +9,7 @@
 
 // a mode, then red, green and blue
 #define LIGHT_SIZE 4
+#define USB_ID_SIZE 4
 
 // link messages from the phone
 #define LINK_INFO 1
@@ -17,6 +18,7 @@
 #define LINK_UPDATE_DATA 4
 #define LINK_UPDATE_END 5
 #define LINK_LIGHT 6
+#define LINK_USB_ID 7
 
 // link messages to the phone
 #define LINK_STATUS 1
@@ -34,8 +36,11 @@ size_t store_info(uint8_t *info, size_t size);
 void store_set_info(const uint8_t *info, size_t size);
 void store_light(uint8_t light[LIGHT_SIZE]);
 void store_set_light(const uint8_t light[LIGHT_SIZE]);
+void store_usb_id(uint8_t id[USB_ID_SIZE]);
+void store_set_usb_id(const uint8_t id[USB_ID_SIZE]);
 
 void usb_start(void);
+bool usb_set_id(const uint8_t id[USB_ID_SIZE]);
 void usb_packet(const uint8_t *packet);
 void usb_tick(void);
 void usb_send(uint32_t channel, uint8_t command, const uint8_t *data, size_t size);

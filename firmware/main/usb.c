@@ -34,7 +34,7 @@
 
 static const uint8_t report_descriptor[] = {TUD_HID_REPORT_DESC_FIDO_U2F(PACKET)};
 
-static const tusb_desc_device_t device_descriptor = {
+static tusb_desc_device_t device_descriptor = {
     .bLength = sizeof(tusb_desc_device_t),
     .bDescriptorType = TUSB_DESC_DEVICE,
     .bcdUSB = 0x0200,
@@ -224,8 +224,35 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t id, hid_report_type_t type,
     }
 }
 
+static void current_id(uint8_t id[USB_ID_SIZE])
+{
+    id[0] = device_descriptor.idVendor >> 8;
+    id[1] = device_descriptor.idVendor;
+    id[2] = device_descriptor.idProduct >> 8;
+    id[3] = device_descriptor.idProduct;
+}
+
+// the host reads the id only when it enumerates
+bool usb_set_id(const uint8_t id[USB_ID_SIZE])
+{
+    uint8_t stored[USB_ID_SIZE];
+    current_id(stored);
+    store_usb_id(stored);
+    if (memcmp(stored, id, USB_ID_SIZE) != 0) {
+        store_set_usb_id(id);
+    }
+    uint8_t running[USB_ID_SIZE];
+    current_id(running);
+    return memcmp(running, id, USB_ID_SIZE) != 0;
+}
+
 void usb_start(void)
 {
+    uint8_t id[USB_ID_SIZE];
+    current_id(id);
+    store_usb_id(id);
+    device_descriptor.idVendor = id[0] << 8 | id[1];
+    device_descriptor.idProduct = id[2] << 8 | id[3];
     tinyusb_config_t config = TINYUSB_DEFAULT_CONFIG();
     config.descriptor.device = &device_descriptor;
     config.descriptor.full_speed_config = configuration;

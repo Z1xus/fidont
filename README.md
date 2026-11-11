@@ -47,6 +47,9 @@ For that Android asks once if fidont can use the dongle, and if you say no you o
 The board's RGB light (GPIO 48) turns on while a request waits for you.  
 You can change that in settings under "Fun stuff", it does colors and a rainbow too.
 
+The dongle uses Espressif's generic USB ID (`303A:4004`), you can set another in settings.  
+See [usb.ids](http://www.linux-usb.org/usb.ids) for a list.
+
 ## Helper
 
 On Linux the computer can do the dongle's job itself and you don't need a board, just `fidont-helper` from the [releases](https://github.com/Z1xus/fidont/releases).

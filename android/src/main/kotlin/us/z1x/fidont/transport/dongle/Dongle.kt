@@ -51,6 +51,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import us.z1x.fidont.BuildConfig
 import us.z1x.fidont.Light
+import us.z1x.fidont.UsbId
 import us.z1x.fidont.app
 import us.z1x.fidont.dongle.CANCEL
 import us.z1x.fidont.dongle.Frames
@@ -68,6 +69,7 @@ import us.z1x.fidont.dongle.STATUS
 import us.z1x.fidont.dongle.UPDATE_BEGIN
 import us.z1x.fidont.dongle.UPDATE_DATA
 import us.z1x.fidont.dongle.UPDATE_END
+import us.z1x.fidont.dongle.USB_ID
 import us.z1x.fidont.dongle.frame
 import us.z1x.fidont.dongle.linkId
 import us.z1x.fidont.dongle.linkPartition
@@ -443,6 +445,10 @@ class Dongle(
                     context.app.preferences.light
                         .collect { gatt.send { frame(link.encrypt(LIGHT, it.bytes())) } }
                 }
+                launch {
+                    context.app.preferences.usbId
+                        .collect { gatt.send { frame(link.encrypt(USB_ID, it.bytes())) } }
+                }
             }
             var request: Job? = null
             while (true) {
@@ -644,3 +650,5 @@ private fun Light.bytes(): ByteArray {
     val color = Color.HSVToColor(floatArrayOf(hue, 1f, brightness * brightness))
     return byteArrayOf(mode.ordinal.toByte(), Color.red(color).toByte(), Color.green(color).toByte(), Color.blue(color).toByte())
 }
+
+private fun UsbId.bytes() = byteArrayOf((vendor shr 8).toByte(), vendor.toByte(), (product shr 8).toByte(), product.toByte())

@@ -13,6 +13,8 @@
 #define MAX_INFO 512
 #define EVENTS 16
 #define KEEPALIVE_INTERVAL pdMS_TO_TICKS(100)
+// waits for the last id while a person types
+#define RESTART_DELAY pdMS_TO_TICKS(2000)
 
 #define KEEPALIVE_PROCESSING 1
 #define KEEPALIVE_USER_NEEDED 2
@@ -43,6 +45,9 @@ static size_t info_size;
 
 static const esp_partition_t *update_partition;
 static esp_ota_handle_t update;
+
+static bool restart;
+static TickType_t restart_requested;
 
 static void post(enum source source, uint8_t type, const uint8_t *data, size_t size)
 {
@@ -140,6 +145,12 @@ static void handle(uint8_t type, const uint8_t *data, size_t size)
             light_set(data);
         }
         break;
+    case LINK_USB_ID:
+        if (size == USB_ID_SIZE) {
+            restart = usb_set_id(data);
+            restart_requested = xTaskGetTickCount();
+        }
+        break;
     }
 }
 
@@ -174,6 +185,9 @@ void app_main(void)
         }
 
         TickType_t now = xTaskGetTickCount();
+        if (restart && now - restart_requested >= RESTART_DELAY && !request.active && !update_partition) {
+            esp_restart();
+        }
         if (request.active && now - keepalive >= KEEPALIVE_INTERVAL) {
             uint8_t status = request.forwarded ? KEEPALIVE_USER_NEEDED : KEEPALIVE_PROCESSING;
             usb_send(request.channel, CTAPHID_KEEPALIVE, &status, 1);

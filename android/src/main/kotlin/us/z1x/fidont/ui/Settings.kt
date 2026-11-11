@@ -42,10 +42,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import us.z1x.fidont.BuildConfig
+import us.z1x.fidont.ESPRESSIF_USB_ID
 import us.z1x.fidont.Light
 import us.z1x.fidont.LightMode
 import us.z1x.fidont.R
 import us.z1x.fidont.ThemeMode
+import us.z1x.fidont.UsbId
 import us.z1x.fidont.app
 import us.z1x.fidont.hybrid.CUSTOM_RELAYS
 import us.z1x.fidont.hybrid.FIDONT_RELAY
@@ -55,6 +57,7 @@ import us.z1x.fidont.hybrid.relayDomain
 const val AUTHOR = "https://z1x.us"
 private const val REPOSITORY = "https://github.com/Z1xus/fidont"
 private const val LICENSE = "GPL-3.0"
+private const val USB_IDS = "http://www.linux-usb.org/usb.ids"
 
 // the opacity that Material gives to disabled content
 private const val DISABLED = 0.38f
@@ -77,6 +80,7 @@ fun Settings(
     val relay by preferences.relay.collectAsState()
     val firmware by preferences.firmware.collectAsState()
     val light by preferences.light.collectAsState()
+    val usbId by preferences.usbId.collectAsState()
     val links by context.app.dongle.links
         .collectAsState()
     val strongBox = context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
@@ -93,6 +97,7 @@ fun Settings(
         relay = relay,
         firmware = firmware,
         light = light.takeIf { dongle },
+        usbId = usbId.takeIf { dongle },
         version = BuildConfig.VERSION_NAME,
         commit = BuildConfig.COMMIT,
         strongBox = strongBox,
@@ -104,6 +109,7 @@ fun Settings(
         onRelay = preferences::setRelay,
         onFirmware = preferences::setFirmware,
         onLight = preferences::setLight,
+        onUsbId = preferences::setUsbId,
         onBack = onBack,
         onPrivacy = onPrivacy,
         onLicenses = onLicenses,
@@ -118,6 +124,7 @@ fun SettingsScreen(
     relay: Int,
     firmware: String,
     light: Light?,
+    usbId: UsbId?,
     version: String,
     commit: String,
     strongBox: Boolean,
@@ -129,6 +136,7 @@ fun SettingsScreen(
     onRelay: (Int) -> Unit,
     onFirmware: (String) -> Unit,
     onLight: (Light) -> Unit,
+    onUsbId: (UsbId) -> Unit,
     onBack: () -> Unit,
     onPrivacy: () -> Unit,
     onLicenses: () -> Unit,
@@ -196,6 +204,10 @@ fun SettingsScreen(
         item { Relay(relay, onRelay) }
         item { SectionHeader(R.string.firmware) }
         item { Firmware(firmware, onFirmware) }
+        if (usbId != null) {
+            item { SectionHeader(R.string.usb_id) }
+            item { UsbIdSetting(usbId, onUsbId) }
+        }
         item { SectionHeader(R.string.appearance) }
         item {
             GroupItem(0, 3) {
@@ -346,6 +358,74 @@ private fun Relay(
             style = MaterialTheme.typography.bodySmall,
         )
     }
+}
+
+@Composable
+private fun UsbIdSetting(
+    usbId: UsbId,
+    onUsbId: (UsbId) -> Unit,
+) {
+    val links = LocalUriHandler.current
+    var custom by rememberSaveable { mutableStateOf(usbId != ESPRESSIF_USB_ID) }
+    var text by rememberSaveable { mutableStateOf(if (custom) usbId.toString() else "") }
+    val count = if (custom) 4 else 3
+    Column {
+        Entry(
+            0,
+            count,
+            stringResource(R.string.usb_id_espressif),
+            supporting = ESPRESSIF_USB_ID.toString(),
+            trailing = { RadioButton(!custom, onClick = null) },
+            onClick = {
+                custom = false
+                onUsbId(ESPRESSIF_USB_ID)
+            },
+        )
+        Entry(
+            1,
+            count,
+            stringResource(R.string.usb_id_custom),
+            trailing = { RadioButton(custom, onClick = null) },
+            onClick = {
+                custom = true
+                parseUsbId(text)?.let(onUsbId)
+            },
+        )
+        if (custom) {
+            GroupItem(2, count) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { value ->
+                        text = value.uppercase().filter { it == ':' || it in '0'..'9' || it in 'A'..'F' }.take(9)
+                        parseUsbId(text)?.let(onUsbId)
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
+                    label = { Text(stringResource(R.string.usb_id_field)) },
+                    placeholder = { Text("1209:0001") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                    singleLine = true,
+                )
+            }
+        }
+        Entry(
+            count - 1,
+            count,
+            stringResource(R.string.usb_id_list),
+            supporting = USB_IDS.removePrefix("http://www."),
+            onClick = { links.openUri(USB_IDS) },
+        )
+        Text(
+            stringResource(R.string.usb_id_body),
+            Modifier.padding(start = 32.dp, top = 8.dp, end = 32.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+private fun parseUsbId(text: String): UsbId? {
+    val (vendor, product) = Regex("([0-9A-F]{4}):([0-9A-F]{4})").matchEntire(text)?.destructured ?: return null
+    return UsbId(vendor.toInt(16), product.toInt(16))
 }
 
 @Composable

@@ -175,6 +175,12 @@
     <string name="firmware_body">fidont downloads this to set up or update your dongle. The file must match this version of the app.</string>
     <string name="relay_id">Relay ID</string>
     <string name="relay_id_body">A number from 256 to 65535</string>
+    <string name="usb_id">Dongle USB ID</string>
+    <string name="usb_id_espressif">Espressif</string>
+    <string name="usb_id_custom">Custom</string>
+    <string name="usb_id_field">ID</string>
+    <string name="usb_id_list">Known IDs</string>
+    <string name="usb_id_body">The dongle restarts when the ID changes.</string>
     <string name="fun">Fun stuff</string>
     <string name="light_off">Off</string>
     <string name="light_requests">Requests</string>

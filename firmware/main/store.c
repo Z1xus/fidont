@@ -69,3 +69,18 @@ void store_set_light(const uint8_t light[LIGHT_SIZE])
     nvs_set_blob(storage(), "light", light, LIGHT_SIZE);
     nvs_commit(storage());
 }
+
+void store_usb_id(uint8_t id[USB_ID_SIZE])
+{
+    uint8_t stored[USB_ID_SIZE];
+    size_t size = USB_ID_SIZE;
+    if (nvs_get_blob(storage(), "usb_id", stored, &size) == ESP_OK && size == USB_ID_SIZE) {
+        memcpy(id, stored, USB_ID_SIZE);
+    }
+}
+
+void store_set_usb_id(const uint8_t id[USB_ID_SIZE])
+{
+    nvs_set_blob(storage(), "usb_id", id, USB_ID_SIZE);
+    nvs_commit(storage());
+}

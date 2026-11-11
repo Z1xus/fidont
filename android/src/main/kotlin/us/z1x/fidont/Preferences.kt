@@ -16,6 +16,8 @@ private const val BACKUP_FAILED = "backup_failed"
 private const val LIGHT_MODE = "light_mode"
 private const val LIGHT_HUE = "light_hue"
 private const val LIGHT_BRIGHTNESS = "light_brightness"
+private const val USB_VENDOR = "usb_vendor"
+private const val USB_PRODUCT = "usb_product"
 
 enum class ThemeMode { System, Light, Dark }
 
@@ -27,6 +29,15 @@ data class Light(
     val hue: Float,
     val brightness: Float,
 )
+
+data class UsbId(
+    val vendor: Int,
+    val product: Int,
+) {
+    override fun toString() = "%04X:%04X".format(vendor, product)
+}
+
+val ESPRESSIF_USB_ID = UsbId(0x303a, 0x4004)
 
 class Preferences(
     context: Context,
@@ -47,6 +58,10 @@ class Preferences(
                 store.getFloat(LIGHT_HUE, 160f),
                 store.getFloat(LIGHT_BRIGHTNESS, 0.5f),
             ),
+        )
+    val usbId =
+        MutableStateFlow(
+            UsbId(store.getInt(USB_VENDOR, ESPRESSIF_USB_ID.vendor), store.getInt(USB_PRODUCT, ESPRESSIF_USB_ID.product)),
         )
 
     fun setTheme(mode: ThemeMode) {
@@ -92,6 +107,14 @@ class Preferences(
             putFloat(LIGHT_BRIGHTNESS, value.brightness)
         }
         light.value = value
+    }
+
+    fun setUsbId(value: UsbId) {
+        store.edit {
+            putInt(USB_VENDOR, value.vendor)
+            putInt(USB_PRODUCT, value.product)
+        }
+        usbId.value = value
     }
 
     fun finishOnboarding() {
