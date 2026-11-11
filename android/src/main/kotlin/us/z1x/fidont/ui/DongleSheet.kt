@@ -46,7 +46,7 @@ sealed interface DongleState {
 
     data object Connected : DongleState
 
-    data class Unpairing(val waiting: Boolean, val failed: Boolean, val needsBluetooth: Boolean, val saveFailed: Boolean) : DongleState
+    data class Unpairing(val waiting: Boolean, val failed: Boolean, val needsBluetooth: Boolean) : DongleState
 
     data class Updating(
         val progress: Float,
@@ -270,7 +270,6 @@ private fun body(state: DongleState): Int =
 
         is DongleState.Unpairing -> {
             when {
-                state.saveFailed -> R.string.dongle_unpair_save_failed_body
                 state.needsBluetooth -> R.string.dongle_unpair_permission_body
                 state.failed -> R.string.dongle_unpair_failed_body
                 state.waiting -> R.string.dongle_unpair_queued_body

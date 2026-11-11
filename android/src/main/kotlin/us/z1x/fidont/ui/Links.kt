@@ -63,7 +63,6 @@ fun rememberLinks(): Links {
     val statuses by dongle.status.collectAsState()
     val unpairing by dongle.unpairing.collectAsState()
     val unpairFailed by dongle.unpairFailed.collectAsState()
-    val unpairSaveFailed by dongle.unpairSaveFailed.collectAsState()
     val repair by dongle.repair.collectAsState()
     val paired = links.firstOrNull { it.computer == null }
     val computers = links.filter { it.computer != null }
@@ -159,7 +158,7 @@ fun rememberLinks(): Links {
 
             paired != null && (unpairing == paired.id || unpairFailed) -> {
                 val connected = statuses[paired.id] == Status.Connected || statuses[paired.id] is Status.Updating
-                DongleState.Unpairing(waiting = !connected, failed = unpairFailed, needsBluetooth = !allowed, saveFailed = unpairSaveFailed)
+                DongleState.Unpairing(waiting = !connected, failed = unpairFailed, needsBluetooth = !allowed)
             }
 
             paired == null || board != null -> {

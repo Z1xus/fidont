@@ -89,7 +89,6 @@
     <string name="dongle_unpaired">Dongle unpaired</string>
     <string name="dongle_unpaired_body">The dongle has been unpaired. Pair it over Bluetooth, or set it up over USB to use it again.</string>
     <string name="dongle_unpair_failed">Couldn\'t unpair dongle</string>
-    <string name="dongle_unpair_save_failed_body">Couldn\'t save the unpair state. Keep fidont open and try again before pairing the dongle.</string>
     <string name="dongle_unpair_failed_body">The request is still saved. Try again with the dongle nearby. Older firmware may require setting it up again over USB.</string>
     <string name="dongle_forget_local">Forget on this phone</string>
     <string name="dongle_forget_local_body">The dongle may remain paired. To use it again, plug it into this phone while holding BOOT, then tap Set up.</string>

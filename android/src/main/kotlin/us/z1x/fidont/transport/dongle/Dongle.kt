@@ -176,7 +176,6 @@ class Dongle(
     val pending = MutableStateFlow(0)
     val unpairing = MutableStateFlow(preferences.getString(UNPAIRING, null))
     val unpairFailed = MutableStateFlow(false)
-    val unpairSaveFailed = MutableStateFlow(false)
     val repair = MutableStateFlow(preferences.getBoolean(REPAIR, false))
     private val unpairAttempt = MutableStateFlow(0)
 
@@ -354,7 +353,6 @@ class Dongle(
         if (completed) editor.putBoolean(REPAIR, true)
         if (!editor.commit()) {
             if (dongle) {
-                unpairSaveFailed.value = true
                 unpairFailed.value = true
             }
             return false
@@ -364,7 +362,6 @@ class Dongle(
         if (completed) repair.value = true
         if (dongle) {
             unpairFailed.value = false
-            unpairSaveFailed.value = false
         }
         if (links.value.isEmpty()) {
             if (Build.VERSION.SDK_INT >= 33) {
@@ -380,14 +377,12 @@ class Dongle(
     fun unpair(id: String) {
         if (unpairing.value != id) {
             if (!preferences.edit().putString(UNPAIRING, id).commit()) {
-                unpairSaveFailed.value = true
                 unpairFailed.value = true
                 return
             }
             unpairing.value = id
         }
         unpairFailed.value = false
-        unpairSaveFailed.value = false
         unpairAttempt.update { it + 1 }
     }
 
@@ -444,7 +439,6 @@ class Dongle(
         }
         if (paired.computer == null) {
             unpairFailed.value = false
-            unpairSaveFailed.value = false
             preferences.edit { remove(REPAIR) }
             repair.value = false
         }
