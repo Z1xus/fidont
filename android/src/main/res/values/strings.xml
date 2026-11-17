@@ -107,6 +107,8 @@
     <string name="request_channel">Requests</string>
     <string name="request_title">A computer is asking for your key</string>
     <string name="request_body">Open fidont to answer.</string>
+    <string name="link_notification_body">Waiting for authentication requests.</string>
+    <string name="link_notification_open">Open fidont to connect to your computer.</string>
     <string name="bluetooth">Bluetooth key</string>
     <string name="bluetooth_connected">Connected to %1$s</string>
     <string name="bluetooth_connected_body">Pick the USB security key option in your browser.</string>

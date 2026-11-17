@@ -28,23 +28,39 @@ class RequestReceiver : BroadcastReceiver() {
         if (associated == true) {
             context.startForegroundService(Intent(context, LinkService::class.java))
         } else if (Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-            context.getSystemService(NotificationManager::class.java).notify(REQUEST_NOTIFICATION, requestNotification(context))
+            val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+            context.getSystemService(NotificationManager::class.java).notify(REQUEST_NOTIFICATION, linkNotification(context, open))
         }
     }
 }
 
-fun requestNotification(context: Context): Notification {
+fun requestNotification(
+    context: Context,
+    approval: PendingIntent,
+): Notification =
+    notification(context)
+        .setContentTitle(context.getString(R.string.request_title))
+        .setContentText(context.getString(R.string.request_body))
+        .setContentIntent(approval)
+        .build()
+
+fun linkNotification(
+    context: Context,
+    connect: PendingIntent? = null,
+): Notification =
+    notification(context)
+        .setContentTitle(context.getString(R.string.bluetooth))
+        .setContentText(context.getString(if (connect == null) R.string.link_notification_body else R.string.link_notification_open))
+        .setContentIntent(connect)
+        .setAutoCancel(connect != null)
+        .build()
+
+private fun notification(context: Context): Notification.Builder {
     val name = context.getString(R.string.request_channel)
     val channel = NotificationChannel(CHANNEL, name, NotificationManager.IMPORTANCE_HIGH)
     context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-    val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
     return Notification
         .Builder(context, CHANNEL)
         .setSmallIcon(R.drawable.ic_key)
-        .setContentTitle(context.getString(R.string.request_title))
-        .setContentText(context.getString(R.string.request_body))
-        .setContentIntent(open)
-        .setAutoCancel(true)
         .setOnlyAlertOnce(true)
-        .build()
 }

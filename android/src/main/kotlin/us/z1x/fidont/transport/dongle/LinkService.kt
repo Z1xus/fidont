@@ -36,7 +36,7 @@ class LinkService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
-        startForeground(REQUEST_NOTIFICATION, requestNotification(this), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        startForeground(REQUEST_NOTIFICATION, linkNotification(this), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         return START_NOT_STICKY
     }
 

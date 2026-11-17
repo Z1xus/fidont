@@ -1,5 +1,8 @@
 package us.z1x.fidont.ui
 
+import android.app.ActivityManager
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG
@@ -22,16 +25,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.DisposableHandle
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import us.z1x.fidont.R
 import us.z1x.fidont.store.Credential
+import us.z1x.fidont.transport.dongle.requestNotification
 import java.security.Signature
+import java.util.UUID
 import javax.crypto.Cipher
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
+
+private object NotifyRequest : AbstractCoroutineContextElement(Key) {
+    object Key : CoroutineContext.Key<NotifyRequest>
+}
+
+private const val PROMPT_NOTIFICATION = 2
 
 private sealed class Request {
+    val token = "fidont:prompt/${UUID.randomUUID()}".toUri()
     val result = CompletableDeferred<Any?>()
+    var owner: PromptActivity? = null
 
     class Authenticate(
         val title: String,
@@ -47,12 +67,29 @@ private sealed class Request {
 class PromptActivity : ComponentActivity() {
     private val cancellation = CancellationSignal()
     private var shown: Request? = null
+    private var completion: DisposableHandle? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val request = request ?: return finish()
+        val request = request?.takeIf { it.token == intent.data && !it.result.isCompleted }
+        if (request == null) {
+            intent.data?.let { getSystemService(NotificationManager::class.java).cancel(it.toString(), PROMPT_NOTIFICATION) }
+            return finish()
+        }
+        // Auto-launch and a notification tap may race. Only one activity owns the dialog.
+        request.owner?.let { owner ->
+            getSystemService(ActivityManager::class.java).appTasks
+                .firstOrNull { it.taskInfo?.taskId == owner.taskId }?.moveToFront()
+            return finish()
+        }
+        request.owner = this
         shown = request
-        request.result.invokeOnCompletion { runOnUiThread(::finish) }
+        completion = request.result.invokeOnCompletion {
+            runOnUiThread {
+                cancellation.cancel()
+                finish()
+            }
+        }
         when (request) {
             is Request.Authenticate -> authenticate(request)
             is Request.Choose -> setContent { AppTheme { Chooser(request) } }
@@ -60,23 +97,27 @@ class PromptActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
+        completion?.dispose()
+        shown?.takeIf { it.owner === this }?.let {
+            it.owner = null
+            if (!isChangingConfigurations) it.result.complete(null)
+        }
         cancellation.cancel()
-        shown?.result?.complete(null)
+        super.onDestroy()
     }
 
     private fun authenticate(request: Request.Authenticate) {
         val callback =
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    request.result.complete(result.cryptoObject)
+                    if (request.owner === this@PromptActivity) request.result.complete(result.cryptoObject)
                 }
 
                 override fun onAuthenticationError(
                     errorCode: Int,
                     errString: CharSequence,
                 ) {
-                    request.result.complete(null)
+                    if (request.owner === this@PromptActivity) request.result.complete(null)
                 }
             }
         BiometricPrompt
@@ -117,7 +158,10 @@ class PromptActivity : ComponentActivity() {
 
     companion object {
         private val mutex = Mutex()
+        // Accessed only on the main dispatcher, including activity ownership.
         private var request: Request? = null
+
+        suspend fun <T> withNotification(block: suspend () -> T): T = withContext(NotifyRequest) { block() }
 
         suspend fun authenticate(
             context: Context,
@@ -148,16 +192,33 @@ class PromptActivity : ComponentActivity() {
         private suspend fun show(
             context: Context,
             request: Request,
-        ): Any? =
+        ): Any? = withContext(Dispatchers.Main.immediate) {
             mutex.withLock {
-                this.request = request
-                context.startActivity(Intent(context, PromptActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                val intent = Intent(context, PromptActivity::class.java)
+                    .setData(request.token)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val notifications = context.getSystemService(NotificationManager::class.java)
+                var open: PendingIntent? = null
+                this@Companion.request = request
                 try {
+                    if (currentCoroutineContext()[NotifyRequest.Key] != null) {
+                        open = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+                        notifications.notify(request.token.toString(), PROMPT_NOTIFICATION, requestNotification(context, open))
+                    }
+                    try {
+                        context.startActivity(intent)
+                    } catch (error: SecurityException) {
+                        // A background launch denial must not revoke the user's notification action.
+                        if (open == null) throw error
+                    }
                     request.result.await()
                 } finally {
+                    this@Companion.request = null
+                    open?.cancel()
+                    notifications.cancel(request.token.toString(), PROMPT_NOTIFICATION)
                     request.result.cancel()
-                    this.request = null
                 }
             }
+        }
     }
 }
