@@ -580,13 +580,11 @@ class Dongle(
                     }
                 }
             }
-            // Authentication and its queued response stay revocable until the serialized write commits them.
             val request = AtomicReference<Job?>()
             while (true) {
                 val message = gatt.receive()?.let(link::decrypt) ?: break
                 when (message[0].toInt()) {
                     REQUEST -> {
-                        // The wire has one current request per session. Revoke its prompt before replacing it.
                         request.getAndSet(null)?.cancelAndJoin()
                         val authentication = async(Dispatchers.Default, start = CoroutineStart.LAZY) {
                             PromptActivity.withNotification {
@@ -594,13 +592,12 @@ class Dongle(
                             }
                         }
                         request.set(authentication)
-                        // The session owns committed writes, so cancellation cannot interrupt a response already in flight.
+                        // cancellation can revoke a queued reply, but must not interrupt a write
                         launch(Dispatchers.Default) {
                             pending.update { it + 1 }
                             try {
                                 val response = authentication.await()
                                 gatt.send {
-                                    // Evaluated under the GATT write mutex, not before waiting for it.
                                     if (request.compareAndSet(authentication, null)) frame(link.encrypt(RESPONSE, response)) else null
                                 }
                             } finally {

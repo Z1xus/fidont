@@ -76,7 +76,7 @@ class PromptActivity : ComponentActivity() {
             intent.data?.let { getSystemService(NotificationManager::class.java).cancel(it.toString(), PROMPT_NOTIFICATION) }
             return finish()
         }
-        // Auto-launch and a notification tap may race. Only one activity owns the dialog.
+        // a notification tap can race the automatic launch
         request.owner?.let { owner ->
             getSystemService(ActivityManager::class.java).appTasks
                 .firstOrNull { it.taskInfo?.taskId == owner.taskId }?.moveToFront()
@@ -158,7 +158,7 @@ class PromptActivity : ComponentActivity() {
 
     companion object {
         private val mutex = Mutex()
-        // Accessed only on the main dispatcher, including activity ownership.
+        // the activity and caller share this state on the main thread
         private var request: Request? = null
 
         suspend fun <T> withNotification(block: suspend () -> T): T = withContext(NotifyRequest) { block() }
@@ -198,17 +198,16 @@ class PromptActivity : ComponentActivity() {
                     .setData(request.token)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 val notifications = context.getSystemService(NotificationManager::class.java)
-                var open: PendingIntent? = null
+                val open = if (currentCoroutineContext()[NotifyRequest.Key] != null) {
+                    PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+                } else null
                 this@Companion.request = request
                 try {
-                    if (currentCoroutineContext()[NotifyRequest.Key] != null) {
-                        open = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
-                        notifications.notify(request.token.toString(), PROMPT_NOTIFICATION, requestNotification(context, open))
-                    }
+                    open?.let { notifications.notify(request.token.toString(), PROMPT_NOTIFICATION, requestNotification(context, it)) }
                     try {
                         context.startActivity(intent)
                     } catch (error: SecurityException) {
-                        // A background launch denial must not revoke the user's notification action.
+                        // a blocked background launch still leaves the notification usable
                         if (open == null) throw error
                     }
                     request.result.await()
