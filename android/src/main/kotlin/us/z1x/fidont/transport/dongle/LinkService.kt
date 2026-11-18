@@ -13,7 +13,8 @@ import us.z1x.fidont.app
 import kotlin.time.Duration.Companion.seconds
 
 // a site often sends a second request right after the first
-private val IDLE = 30.seconds
+// a silently throttled scan may need the whole 30-second quota window to clear
+private val IDLE = 60.seconds
 
 class LinkService : Service() {
     private val scope = CoroutineScope(Dispatchers.Default)

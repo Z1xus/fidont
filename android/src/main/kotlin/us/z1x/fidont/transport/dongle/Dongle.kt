@@ -13,6 +13,7 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothStatusCodes
+import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
@@ -33,6 +34,7 @@ import android.os.ParcelUuid
 import android.util.Base64
 import androidx.core.content.edit
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -169,6 +171,8 @@ class Dongle(
     private val companions = context.getSystemService(CompanionDeviceManager::class.java)
     private val serving = Mutex()
     private val scanning = Mutex()
+    private val watching = CoroutineScope(Dispatchers.Main.immediate)
+    private var watch: Job? = null
     private var scanned = TimeSource.Monotonic.markNow() - RETRY
     private val pairingScan = MutableStateFlow(false)
     val links = MutableStateFlow(load())
@@ -252,7 +256,11 @@ class Dongle(
         var paired = false
         val found = try {
             pairingScan.value = true
-            find(listOf(ByteArray(ID_SIZE) { if (computer) -1 else 0 }))
+            withTimeoutOrNull(CONNECT_TIMEOUT) {
+                var found: Pair<BluetoothDevice, ByteArray>? = null
+                while (found == null) found = find(listOf(ByteArray(ID_SIZE) { if (computer) -1 else 0 }))
+                found
+            }
         } finally {
             pairingScan.value = false
         }
@@ -324,7 +332,8 @@ class Dongle(
     // so Android can tell us when the app is closed
     @SuppressLint("MissingPermission")
     fun watch(enabled: Boolean) {
-        val scanner = context.getSystemService(BluetoothManager::class.java).adapter?.bluetoothLeScanner ?: return
+        watch?.cancel()
+        watch = null
         val intent =
             PendingIntent.getBroadcast(
                 context,
@@ -333,10 +342,24 @@ class Dongle(
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
             )
         try {
-            scanner.stopScan(intent)
+            scanIfEnabled { context.getSystemService(BluetoothManager::class.java).adapter?.bluetoothLeScanner?.stopScan(intent) }
             if (!enabled) context.getSystemService(NotificationManager::class.java).cancel(REQUEST_NOTIFICATION)
-            val waiting = links.value.map { filter(linkId(it.secret) + if (it.computer == null) byteArrayOf(1) else byteArrayOf()) }
-            if (enabled && waiting.isNotEmpty()) scanner.startScan(waiting, ScanSettings.Builder().build(), intent)
+            if (enabled && links.value.isNotEmpty()) {
+                watch = watching.launch {
+                    try {
+                        scan {
+                            val waiting = links.value.map { filter(linkId(it.secret) + if (it.computer == null) byteArrayOf(1) else byteArrayOf()) }
+                            if (waiting.isNotEmpty()) {
+                                scanIfEnabled {
+                                    val scanner = context.getSystemService(BluetoothManager::class.java).adapter?.bluetoothLeScanner
+                                    scanner?.startScan(waiting, ScanSettings.Builder().build(), intent)
+                                }
+                            }
+                        }
+                    } catch (_: SecurityException) {
+                    }
+                }
+            }
         } catch (_: SecurityException) {
         }
     }
@@ -486,35 +509,58 @@ class Dongle(
         }
     }
 
+    // callback and PendingIntent scans share Android's registration quota
+    private suspend fun scan(start: () -> Unit) = scanning.withLock {
+        delay(RETRY - scanned.elapsedNow())
+        scanned = TimeSource.Monotonic.markNow()
+        start()
+    }
+
+    private fun scanIfEnabled(block: () -> Unit) {
+        try {
+            block()
+        } catch (error: IllegalStateException) {
+            if (error.message != "BT Adapter is not turned ON") throw error
+        }
+    }
+
     @SuppressLint("MissingPermission")
     private suspend fun find(ids: List<ByteArray>, background: Boolean = false): Pair<BluetoothDevice, ByteArray>? {
         if (background) pairingScan.first { !it }
-        scanning.withLock {
-            if (background && pairingScan.value) return null
-            delay(RETRY - scanned.elapsedNow())
-            if (background && pairingScan.value) return null
-            scanned = TimeSource.Monotonic.markNow()
-        }
-        val scanner = context.getSystemService(BluetoothManager::class.java).adapter?.bluetoothLeScanner ?: return null
-        return suspendCancellableCoroutine { continuation ->
-            val callback =
-                object : ScanCallback() {
-                    override fun onScanResult(
-                        callbackType: Int,
-                        result: ScanResult,
-                    ) {
-                        val id = result.scanRecord?.getServiceData(ParcelUuid(SERVICE)) ?: return
-                        scanner.stopScan(this)
-                        if (continuation.isActive) continuation.resume(result.device to id.copyOf(ID_SIZE))
-                    }
-
-                    override fun onScanFailed(errorCode: Int) {
-                        if (continuation.isActive) continuation.resume(null)
-                    }
+        var scanner: BluetoothLeScanner? = null
+        val results = Channel<Pair<BluetoothDevice, ByteArray>?>(Channel.CONFLATED)
+        val callback =
+            object : ScanCallback() {
+                override fun onScanResult(
+                    callbackType: Int,
+                    result: ScanResult,
+                ) {
+                    val id = result.scanRecord?.getServiceData(ParcelUuid(SERVICE)) ?: return
+                    results.trySend(result.device to id.copyOf(ID_SIZE))
                 }
-            val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-            scanner.startScan(ids.map(::filter), settings, callback)
-            continuation.invokeOnCancellation { scanner.stopScan(callback) }
+
+                override fun onScanFailed(errorCode: Int) {
+                    results.trySend(null)
+                }
+            }
+        try {
+            scan {
+                if (!background || !pairingScan.value) {
+                    val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+                    scanIfEnabled {
+                        val available = context.getSystemService(BluetoothManager::class.java).adapter?.bluetoothLeScanner
+                        available?.startScan(ids.map(::filter), settings, callback)
+                        scanner = available
+                    }
+                } else {
+                    results.trySend(null)
+                }
+            }
+            // Android 12 can reject a throttled scan without calling onScanFailed
+            return withTimeoutOrNull(RETRY) { results.receive() }
+        } finally {
+            results.close()
+            scanIfEnabled { scanner?.stopScan(callback) }
         }
     }
 
