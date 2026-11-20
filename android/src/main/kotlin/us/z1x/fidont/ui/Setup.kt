@@ -32,8 +32,17 @@ fun rememberSetup(): Setup {
 
     LifecycleResumeEffect(Unit) {
         secure = context.getSystemService(KeyguardManager::class.java).isDeviceSecure
-        provider = Build.VERSION.SDK_INT < 34 || context.getSystemService(CredentialManager::class.java)
-            .isEnabledCredentialProviderService(ComponentName(context, ProviderService::class.java))
+        provider = if (Build.VERSION.SDK_INT < 34) {
+            true
+        } else {
+            try {
+                context.getSystemService(CredentialManager::class.java)
+                    .isEnabledCredentialProviderService(ComponentName(context, ProviderService::class.java))
+            } catch (_: NullPointerException) {
+                // Some Android 14 implementations throw here instead of returning false.
+                false
+            }
+        }
         onPauseOrDispose {}
     }
 
