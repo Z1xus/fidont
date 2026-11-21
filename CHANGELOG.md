@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.22
+
+- Fixed a crash on some Android 14 phones, thanks @justimm ([#11](https://github.com/Z1xus/fidont/pull/11))
+
 ## 0.1.21
 - The passkey provider setting opens on all phones
 
