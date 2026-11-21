@@ -33,6 +33,7 @@ import android.os.ParcelUuid
 import android.util.Base64
 import androidx.core.content.edit
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -40,7 +41,9 @@ import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
@@ -136,6 +139,7 @@ private const val UPDATE_CHUNK = 2048
 
 // Android throttles an app that starts more than 5 scans in 30 seconds
 private val RETRY = 8.seconds
+private val SCAN_RETRY = 30.seconds
 private val GATT_TIMEOUT = 15.seconds
 private val CONNECT_TIMEOUT = 60.seconds
 
@@ -496,25 +500,47 @@ class Dongle(
             scanned = TimeSource.Monotonic.markNow()
         }
         val scanner = context.getSystemService(BluetoothManager::class.java).adapter?.bluetoothLeScanner ?: return null
-        return suspendCancellableCoroutine { continuation ->
-            val callback =
-                object : ScanCallback() {
-                    override fun onScanResult(
-                        callbackType: Int,
-                        result: ScanResult,
-                    ) {
-                        val id = result.scanRecord?.getServiceData(ParcelUuid(SERVICE)) ?: return
-                        scanner.stopScan(this)
-                        if (continuation.isActive) continuation.resume(result.device to id.copyOf(ID_SIZE))
-                    }
+        val filters = ids.map(::filter)
+        val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+        val found = CompletableDeferred<Pair<BluetoothDevice, ByteArray>?>()
+        val callback =
+            object : ScanCallback() {
+                override fun onScanResult(
+                    callbackType: Int,
+                    result: ScanResult,
+                ) {
+                    val id = result.scanRecord?.getServiceData(ParcelUuid(SERVICE)) ?: return
+                    found.complete(result.device to id.copyOf(ID_SIZE))
+                }
 
-                    override fun onScanFailed(errorCode: Int) {
-                        if (continuation.isActive) continuation.resume(null)
+                // Android 12 already uses this value, but it became public in API 33
+                @SuppressLint("InlinedApi")
+                override fun onScanFailed(errorCode: Int) {
+                    if (errorCode != SCAN_FAILED_ALREADY_STARTED && errorCode != SCAN_FAILED_SCANNING_TOO_FREQUENTLY) {
+                        found.complete(null)
                     }
                 }
-            val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-            scanner.startScan(ids.map(::filter), settings, callback)
-            continuation.invokeOnCancellation { scanner.stopScan(callback) }
+            }
+
+        fun scanIfEnabled(block: () -> Unit): Boolean =
+            try {
+                block()
+                true
+            } catch (error: IllegalStateException) {
+                if (error.message != "BT Adapter is not turned ON") throw error
+                false
+            }
+
+        try {
+            while (!found.isCompleted) {
+                currentCoroutineContext().ensureActive()
+                if (!scanIfEnabled { scanner.startScan(filters, settings, callback) }) return null
+                // throttling can fail silently; reusing the callback leaves an active scan alone
+                withTimeoutOrNull(SCAN_RETRY) { found.join() }
+            }
+            return found.await()
+        } finally {
+            scanIfEnabled { scanner.stopScan(callback) }
         }
     }
 

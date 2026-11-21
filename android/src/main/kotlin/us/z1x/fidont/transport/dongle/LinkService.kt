@@ -15,6 +15,9 @@ import kotlin.time.Duration.Companion.seconds
 // a site often sends a second request right after the first
 private val IDLE = 30.seconds
 
+// give the first scan retry time to connect
+private val STARTUP_IDLE = 60.seconds
+
 class LinkService : Service() {
     private val scope = CoroutineScope(Dispatchers.Default)
 
@@ -22,10 +25,13 @@ class LinkService : Service() {
         super.onCreate()
         scope.launch { app.dongle.serve() }
         scope.launch {
+            var idle = STARTUP_IDLE
             app.dongle.pending.collectLatest {
                 if (it == 0) {
-                    delay(IDLE)
+                    delay(idle)
                     stopSelf()
+                } else {
+                    idle = IDLE
                 }
             }
         }
