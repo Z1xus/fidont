@@ -33,9 +33,11 @@ import android.os.ParcelUuid
 import android.util.Base64
 import androidx.core.content.edit
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
@@ -89,6 +91,7 @@ import us.z1x.fidont.ecdh
 import us.z1x.fidont.ecdhGenerate
 import us.z1x.fidont.random
 import us.z1x.fidont.sha256
+import us.z1x.fidont.ui.PromptActivity
 import java.io.File
 import java.io.IOException
 import java.security.KeyFactory
@@ -96,6 +99,7 @@ import java.security.Signature
 import java.security.SignatureException
 import java.security.spec.X509EncodedKeySpec
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
 import kotlin.math.min
 import kotlin.time.Duration.Companion.milliseconds
@@ -576,25 +580,34 @@ class Dongle(
                     }
                 }
             }
-            var request: Job? = null
+            val request = AtomicReference<Job?>()
             while (true) {
                 val message = gatt.receive()?.let(link::decrypt) ?: break
                 when (message[0].toInt()) {
                     REQUEST -> {
-                        request =
-                            launch(Dispatchers.Default) {
-                                pending.update { it + 1 }
-                                try {
-                                    val response = context.app.authenticator.handle(message.copyOfRange(1, message.size))
-                                    gatt.send { frame(link.encrypt(RESPONSE, response)) }
-                                } finally {
-                                    pending.update { it - 1 }
-                                }
+                        request.getAndSet(null)?.cancelAndJoin()
+                        val authentication = async(Dispatchers.Default, start = CoroutineStart.LAZY) {
+                            PromptActivity.withNotification {
+                                context.app.authenticator.handle(message.copyOfRange(1, message.size))
                             }
+                        }
+                        request.set(authentication)
+                        // cancellation can revoke a queued reply, but must not interrupt a write
+                        launch(Dispatchers.Default) {
+                            pending.update { it + 1 }
+                            try {
+                                val response = authentication.await()
+                                gatt.send {
+                                    if (request.compareAndSet(authentication, null)) frame(link.encrypt(RESPONSE, response)) else null
+                                }
+                            } finally {
+                                pending.update { it - 1 }
+                            }
+                        }
                     }
 
                     CANCEL -> {
-                        request?.cancel()
+                        request.getAndSet(null)?.cancelAndJoin()
                     }
 
                     UNPAIR_STATUS -> {
@@ -691,11 +704,11 @@ private class Gatt(
         return done(descriptorWritten)
     }
 
-    suspend fun send(frame: () -> ByteArray): Boolean =
+    suspend fun send(frame: () -> ByteArray?): Boolean =
         writing.withLock {
             if (closed) return false
             try {
-                val bytes = frame()
+                val bytes = frame() ?: return false
                 val chunkSize = payload
                 for (offset in bytes.indices step chunkSize) {
                     val chunk = bytes.copyOfRange(offset, min(offset + chunkSize, bytes.size))
